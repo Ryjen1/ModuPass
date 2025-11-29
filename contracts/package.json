@@ -1,0 +1,25 @@
+{
+  "name": "contracts",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "build": "tsc",
+    "compile": "hardhat compile",
+    "test": "hardhat test"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^6.1.0",
+    "@types/node": "^24.10.1",
+    "dotenv": "^17.2.3",
+    "hardhat": "^2.26.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
