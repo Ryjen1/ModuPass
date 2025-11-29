@@ -1,0 +1,20 @@
+{
+  "name": "kernel",
+  "version": "1.0.0",
+  "description": "ModuPass kernel workflow library (KRNL-facing logic)",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "dev": "ts-node src/index.ts",
+    "test": "echo \"No tests yet for kernel\" && exit 0"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "devDependencies": {
+    "@types/node": "^24.10.1",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  }
+}
