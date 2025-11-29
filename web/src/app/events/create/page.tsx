@@ -74,57 +74,7 @@ export default function CreateEventPage() {
         maxAttendeesNum
       );
 
-      // Step 2: Store event in Supabase
-      toast.info("Storing event data...");
-      const { error: dbError } = await supabase.from("events").insert({
-        id: eventId,
-        name: eventName,
-        description,
-        organizer_address: address,
-        max_attendees: maxAttendeesNum,
-        codes_merkle_root: merkleRoot,
-        location,
-        contract_event_id: eventId
-      });
-
-      if (dbError) {
-        throw new Error(`Database error: ${dbError.message}`);
-      }
-
-      // Step 3: Store verification codes in Supabase (now that event exists)
-      toast.info("Storing verification codes...");
-      await storeVerificationCodes(eventId, codes, tree, leaves);
-
-      // Step 3: Check network
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const network = await provider.getNetwork();
-
-      if (network.chainId !== 11155111n) {
-        toast.info("Switching to Sepolia network...");
-        try {
-          await window.ethereum.request({
-            method: "wallet_switchEthereumChain",
-            params: [{ chainId: "0xaa36a7" }],
-          });
-        } catch (switchError: any) {
-          if (switchError.code === 4902) {
-            await window.ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [{
-                chainId: "0xaa36a7",
-                chainName: "Sepolia Testnet",
-                nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
-                rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
-                blockExplorerUrls: ["https://sepolia.etherscan.io"]
-              }]
-            });
-          } else {
-            throw switchError;
-          }
-        }
-      }
-
-      // Step 4: Create AuthData (simplified for now)
+      // Step 2: Create AuthData (simplified for now)
       const authData = {
         nonce: Math.floor(Date.now() / 1000),
         expiry: Math.floor(Date.now() / 1000) + 3600,
@@ -135,8 +85,9 @@ export default function CreateEventPage() {
         signature: "0x"
       };
 
-      // Step 5: Submit to blockchain
-      toast.info("Creating event on blockchain...");
+      // Step 3: Submit to blockchain
+      toast.info("Please confirm transaction in your wallet...");
+      const provider = new ethers.BrowserProvider(window.ethereum);
       const signer = await provider.getSigner();
       const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
@@ -148,8 +99,33 @@ export default function CreateEventPage() {
         maxAttendeesNum
       );
 
-      toast.info("Waiting for confirmation...");
+      toast.info("Transaction submitted! Waiting for confirmation...");
       const receipt = await tx.wait();
+
+      // Step 4: Store event in Supabase (only after blockchain success)
+      toast.info("Storing event data...");
+      const { error: dbError } = await supabase.from("events").insert({
+        id: eventId,
+        name: eventName,
+        description,
+        organizer_address: address,
+        max_attendees: maxAttendeesNum,
+        codes_merkle_root: merkleRoot,
+        location,
+        contract_event_id: eventId,
+        // Store tx hash if you have a column for it, otherwise it's fine
+      });
+
+      if (dbError) {
+        // If DB save fails but blockchain succeeded, we should probably alert the user
+        // In a production app, you'd have a recovery mechanism here
+        console.error("Failed to save event to DB after blockchain success:", dbError);
+        throw new Error(`Database error: ${dbError.message}`);
+      }
+
+      // Step 5: Store verification codes in Supabase
+      toast.info("Storing verification codes...");
+      await storeVerificationCodes(eventId, codes, tree, leaves);
 
       // Success!
       setCreatedEvent({
