@@ -1,0 +1,52 @@
+{
+    "name": "ModuPass Attendance Verification",
+    "description": "Verifies Merkle proof for event attendance codes off-chain",
+    "version": "1.0.0",
+    "network": "sepolia",
+    "inputs": [
+        {
+            "name": "code",
+            "type": "string",
+            "description": "Verification code from QR scan"
+        },
+        {
+            "name": "proof",
+            "type": "bytes32[]",
+            "description": "Merkle proof array for the code"
+        },
+        {
+            "name": "root",
+            "type": "bytes32",
+            "description": "Merkle root stored in event contract"
+        }
+    ],
+    "logic": {
+        "type": "merkle_verification",
+        "steps": [
+            {
+                "step": 1,
+                "action": "hash_input",
+                "input": "code",
+                "method": "keccak256",
+                "output": "leaf_hash"
+            },
+            {
+                "step": 2,
+                "action": "verify_merkle_proof",
+                "leaf": "leaf_hash",
+                "proof": "proof",
+                "root": "root",
+                "output": "is_valid"
+            }
+        ]
+    },
+    "outputs": [
+        {
+            "name": "is_valid",
+            "type": "boolean",
+            "description": "True if code is valid for this event"
+        }
+    ],
+    "gas_sponsorship": false,
+    "execution_mode": "off-chain"
+}

@@ -10,21 +10,21 @@ export default function Hero() {
       <div className="absolute inset-0 gradient-radial pointer-events-none" />
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
-      <div className="container mx-auto px-6 py-24 md:py-32 relative">
+      <div className="container mx-auto px-6 pt-16 pb-24 md:pt-20 md:pb-32 relative">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-1.5 mb-6">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-semibold uppercase tracking-wider text-emerald-700 dark:text-emerald-400">
-              ModuPass • KRNL Demo
+              Built on KRNL infrastructure
             </span>
           </div>
 
-          <h1 className="heading-xl mb-6 bg-gradient-to-br from-foreground to-foreground/70 bg-clip-text text-transparent">
-            Modular event passes with verifiable on-chain proofs
+          <h1 className="text-5xl md:text-6xl lg:text-7xl mb-8 text-foreground font-bold tracking-tight leading-[1.1]">
+            Verifiable attendance<br className="hidden sm:block" /> credentials for Web3
           </h1>
 
-          <p className="body-lg text-muted-foreground mb-10 max-w-2xl mx-auto">
-            Define events, issue on-chain participation passes, and verify attendance. Powered by a KRNL-style kernel and a minimal on-chain anchor contract.
+          <p className="text-xl md:text-2xl text-muted-foreground mb-12 max-w-3xl mx-auto leading-relaxed">
+            Issue cryptographically verifiable proof of attendance. Cross-chain, modular, and built for communities that value authenticity.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

@@ -15,7 +15,7 @@ import { generateAttendanceAuthData } from "@/lib/services/krnl-service";
 import { markAsAttended } from "@/lib/services/registration-service";
 
 const CONTRACT_ABI = [
-    "function verifyAttendance((uint256,uint256,bytes32,bytes32[],bytes,bool,bytes) authData, string eventId, address attendee) external"
+    "function verifyAttendance((uint256 nonce, uint256 expiry, bytes32 id, bytes32[] executions, bytes result, bool sponsorExecutionFee, bytes signature) authData, string eventId, address attendee) external"
 ];
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";

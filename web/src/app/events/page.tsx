@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, Users, Loader2, Plus } from "lucide-react";
 import Link from "next/link";
+import { supabase } from "@/lib/supabase";
 
 const CONTRACT_ABI = [
   "function getTotalEvents() external view returns (uint256)",
@@ -35,35 +36,53 @@ export default function EventsListPage() {
     loadEvents();
   }, []);
 
+
+
+  // ... imports ...
+
   const loadEvents = async () => {
-    if (!CONTRACT_ADDRESS) {
-      setIsLoading(false);
-      return;
-    }
-
     try {
-      const provider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+      // Fetch events from Supabase (Source of Truth for UI)
+      const { data: dbEvents, error } = await supabase
+        .from('events')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      const totalEvents = await contract.getTotalEvents();
-      const eventsData: EventData[] = [];
-
-      for (let i = 0; i < Number(totalEvents); i++) {
-        const eventId = await contract.getEventIdByIndex(i);
-        const [id, name, organizer, createdAt, isActive] = await contract.getEvent(eventId);
-        const attendees = await contract.getEventAttendees(eventId);
-
-        eventsData.push({
-          eventId: id,
-          eventName: name,
-          organizer,
-          createdAt: Number(createdAt),
-          isActive,
-          attendeeCount: attendees.length
-        });
+      if (error) {
+        throw error;
       }
 
-      setEvents(eventsData.reverse()); // Show newest first
+      if (!dbEvents || dbEvents.length === 0) {
+        setEvents([]);
+        return;
+      }
+
+      // Fetch attendee counts from contract (optional, can fail gracefully)
+      const eventsWithCounts = await Promise.all(dbEvents.map(async (event) => {
+        let attendeeCount = 0;
+
+        if (CONTRACT_ADDRESS) {
+          try {
+            const provider = new ethers.JsonRpcProvider("https://ethereum-sepolia-rpc.publicnode.com");
+            const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+            const attendees = await contract.getEventAttendees(event.id);
+            attendeeCount = attendees.length;
+          } catch (e) {
+            console.warn(`Failed to fetch attendees for ${event.id}`, e);
+          }
+        }
+
+        return {
+          eventId: event.id,
+          eventName: event.name,
+          organizer: event.organizer_address,
+          createdAt: new Date(event.created_at).getTime() / 1000,
+          isActive: event.is_active ?? true,
+          attendeeCount
+        };
+      }));
+
+      setEvents(eventsWithCounts);
     } catch (error) {
       console.error("Error loading events:", error);
     } finally {
