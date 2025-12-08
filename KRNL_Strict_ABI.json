@@ -1,0 +1,44 @@
+[
+    {
+        "inputs": [
+            {
+                "components": [
+                    {
+                        "name": "nonce",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "expiry",
+                        "type": "uint256"
+                    },
+                    {
+                        "name": "id",
+                        "type": "bytes32"
+                    },
+                    {
+                        "name": "executions",
+                        "type": "bytes32[]"
+                    },
+                    {
+                        "name": "result",
+                        "type": "bytes"
+                    },
+                    {
+                        "name": "sponsorExecutionFee",
+                        "type": "bool"
+                    },
+                    {
+                        "name": "signature",
+                        "type": "bytes"
+                    }
+                ],
+                "name": "authData",
+                "type": "tuple"
+            }
+        ],
+        "name": "verifyAttendance",
+        "outputs": [],
+        "stateMutability": "nonpayable",
+        "type": "function"
+    }
+]

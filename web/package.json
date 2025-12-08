@@ -10,13 +10,12 @@
   },
   "dependencies": {
     "@krnl-dev/sdk-react-7702": "^0.1.4",
-    "@privy-io/react-auth": "^3.8.0",
-    "@privy-io/wagmi": "^2.0.3",
+    "@privy-io/react-auth": "^3.8.1",
+    "@privy-io/wagmi": "^2.1.0",
     "@reown/appkit": "^1.8.14",
-    "@reown/appkit-adapter-wagmi": "^1.8.14",
     "@supabase/ssr": "^0.8.0",
     "@supabase/supabase-js": "^2.86.0",
-    "@tanstack/react-query": "^5.90.10",
+    "@tanstack/react-query": "^5.90.12",
     "@wagmi/connectors": "^6.1.4",
     "ethers": "^6.13.4",
     "kernel": "file:../kernel",
@@ -28,8 +27,8 @@
     "react-dom": "19.2.0",
     "sonner": "^2.0.7",
     "uuid": "^13.0.0",
-    "viem": "^2.39.0",
-    "wagmi": "^2.19.4"
+    "viem": "^2.41.2",
+    "wagmi": "^2.19.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

@@ -2,16 +2,14 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useAccount, useDisconnect } from "wagmi";
-import { useAppKit } from '@reown/appkit/react';
+import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { Button } from "@/components/ui/button";
 import { Wallet, LogOut } from "lucide-react";
 
 export default function Navigation() {
   const [mounted, setMounted] = useState(false);
-  const { address, isConnected } = useAccount();
-  const { open } = useAppKit();
-  const { disconnect } = useDisconnect();
+  const { login, logout, authenticated, user } = usePrivy();
+  const { wallets } = useWallets();
 
   useEffect(() => {
     setMounted(true);
@@ -20,6 +18,9 @@ export default function Navigation() {
   const formatAddress = (addr: string) => {
     return `${addr.slice(0, 6)}...${addr.slice(-4)}`;
   };
+
+  const activeWallet = wallets[0];
+  const displayAddress = activeWallet?.address || user?.wallet?.address;
 
   return (
     <header className="sticky top-0 z-40 w-full border-b border-border/50 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -47,19 +48,19 @@ export default function Navigation() {
                 <Wallet className="w-4 h-4" />
                 Loading...
               </Button>
-            ) : isConnected ? (
+            ) : authenticated && displayAddress ? (
               <div className="flex items-center gap-3">
                 <Link href="/app" className="inline-flex items-center rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition">
                   Launch App
                 </Link>
                 <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-accent text-accent-foreground text-sm font-medium">
                   <Wallet className="w-4 h-4" />
-                  {formatAddress(address!)}
+                  {formatAddress(displayAddress)}
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => disconnect()}
+                  onClick={() => logout()}
                   className="text-muted-foreground hover:text-foreground"
                 >
                   <LogOut className="w-4 h-4" />
@@ -67,7 +68,7 @@ export default function Navigation() {
               </div>
             ) : (
               <Button
-                onClick={() => open()}
+                onClick={() => login()}
                 className="inline-flex items-center gap-2 rounded-md bg-primary text-primary-foreground px-4 py-2 text-sm font-medium hover:bg-primary/90 transition"
               >
                 <Wallet className="w-4 h-4" />
