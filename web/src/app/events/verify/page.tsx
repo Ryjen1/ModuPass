@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { useSearchParams } from "next/navigation";
 import { ethers } from "ethers";
 import { Card } from "@/components/ui/card";
@@ -10,19 +10,14 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Loader2, CheckCircle2, AlertCircle, QrCode } from "lucide-react";
 import { toast } from "sonner";
-import { verifyCode, markCodeAsUsed } from "@/lib/services/code-generator";
-import { generateAttendanceAuthData } from "@/lib/services/krnl-service";
-import { markAsAttended } from "@/lib/services/registration-service";
-
-const CONTRACT_ABI = [
-    "function verifyAttendance((uint256 nonce, uint256 expiry, bytes32 id, bytes32[] executions, bytes result, bool sponsorExecutionFee, bytes signature) authData, string eventId, address attendee) external"
-];
+import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
 export default function VerifyPage() {
     const searchParams = useSearchParams();
     const { address, isConnected } = useAccount();
+    const { writeContractAsync } = useWriteContract();
 
     const [eventId, setEventId] = useState(searchParams.get("event") || searchParams.get("eventId") || "");
     const [verificationCode, setVerificationCode] = useState(searchParams.get("code") || "");
@@ -54,84 +49,49 @@ export default function VerifyPage() {
         setIsVerifying(true);
 
         try {
-            // Step 1: Verify code in database
-            toast.info("Validating verification code...");
-            const codeValidation = await verifyCode(eventId, verificationCode);
+            // Step 1: Request KRNL Verification (Mock Node)
+            toast.info("Requesting KRNL verification...");
+            const krnlResponse = await fetch("/api/krnl/verify-attendance", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    eventId,
+                    code: verificationCode,
+                    attendee: address
+                })
+            });
 
-            if (!codeValidation.valid) {
-                throw new Error("Invalid verification code");
+            if (!krnlResponse.ok) {
+                const err = await krnlResponse.json();
+                throw new Error(err.error || "Failed to verify with KRNL Node");
             }
 
-            if (codeValidation.used) {
-                throw new Error("This code has already been used");
+            const { authData, isValid } = await krnlResponse.json();
+
+            if (!isValid) {
+                throw new Error("Invalid verification code (Verification Logic Failed)");
             }
 
-            // Step 2: Check network
-            const provider = new ethers.BrowserProvider(window.ethereum);
-            const network = await provider.getNetwork();
-
-            if (network.chainId !== 11155111n) {
-                toast.info("Switching to Sepolia network...");
-                try {
-                    await window.ethereum.request({
-                        method: "wallet_switchEthereumChain",
-                        params: [{ chainId: "0xaa36a7" }],
-                    });
-                } catch (switchError: any) {
-                    if (switchError.code === 4902) {
-                        await window.ethereum.request({
-                            method: "wallet_addEthereumChain",
-                            params: [{
-                                chainId: "0xaa36a7",
-                                chainName: "Sepolia Testnet",
-                                nativeCurrency: { name: "Sepolia ETH", symbol: "ETH", decimals: 18 },
-                                rpcUrls: ["https://ethereum-sepolia-rpc.publicnode.com"],
-                                blockExplorerUrls: ["https://sepolia.etherscan.io"]
-                            }]
-                        });
-                    } else {
-                        throw switchError;
-                    }
-                }
-            }
-
-            // Step 3: Generate KRNL AuthData
-            toast.info("Generating KRNL proof...");
-            const { authData, proofData } = await generateAttendanceAuthData(
-                eventId,
-                address,
-                verificationCode
-            );
-
-            // Step 4: Submit to blockchain
+            // Step 2: Submit to blockchain
             toast.info("Verifying attendance on-chain...");
-            const signer = await provider.getSigner();
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-            const tx = await contract.verifyAttendance(
-                authData,
-                eventId,
-                address
-            );
+            const txHash = await writeContractAsync({
+                address: CONTRACT_ADDRESS as `0x${string}`,
+                abi: ModuPassTargetBase.abi,
+                functionName: "verifyAttendance",
+                args: [
+                    authData,
+                    eventId,
+                    address
+                ]
+            });
 
-            toast.info("Waiting for confirmation...");
-            const receipt = await tx.wait();
-
-            // Step 5: Mark code as used in database
-            await markCodeAsUsed(eventId, verificationCode, address);
-
-            // Step 6: Mark registration as attended (if exists)
-            try {
-                await markAsAttended(eventId, address);
-            } catch (error) {
-                // Registration might not exist, that's okay
-                console.log("No registration to mark as attended");
-            }
+            toast.info("Transaction submitted! Waiting for confirmation...");
 
             // Success!
             setVerificationComplete({
                 eventId,
-                txHash: receipt.hash,
+                txHash,
                 proofHash: authData.id
             });
 
@@ -143,16 +103,7 @@ export default function VerifyPage() {
 
         } catch (error: any) {
             console.error("Verification error:", error);
-
-            if (error.code === "ACTION_REJECTED") {
-                toast.error("Transaction rejected");
-            } else if (error.message?.includes("Already verified")) {
-                toast.error("You have already verified attendance for this event");
-            } else if (error.message?.includes("Event is full")) {
-                toast.error("Event has reached maximum capacity");
-            } else {
-                toast.error(error.message || "Failed to verify attendance");
-            }
+            toast.error(error.message || "Failed to verify attendance");
         } finally {
             setIsVerifying(false);
         }
@@ -223,12 +174,6 @@ export default function VerifyPage() {
                         <div className="flex gap-3">
                             <Button onClick={() => setVerificationComplete(null)} variant="outline" className="flex-1">
                                 Verify Another
-                            </Button>
-                            <Button
-                                onClick={() => window.location.href = `/events/${verificationComplete.eventId}`}
-                                className="flex-1"
-                            >
-                                View Event
                             </Button>
                         </div>
                     </Card>

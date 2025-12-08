@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { useAccount } from "wagmi";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { ethers } from "ethers";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,13 +10,9 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Calendar, Loader2, CheckCircle2, AlertCircle, Download, QrCode } from "lucide-react";
 import { toast } from "sonner";
-import { generateVerificationCodes, storeVerificationCodes } from "@/lib/services/code-generator";
-import { supabase } from "@/lib/supabase";
+import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
-
-const CONTRACT_ABI = [
-  "function createEvent((uint256 nonce, uint256 expiry, bytes32 id, bytes32[] executions, bytes result, bool sponsorExecutionFee, bytes signature) authData, string eventId, string eventName, bytes32 codesMerkleRoot, uint256 maxAttendees) external"
-];
+import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -30,12 +26,14 @@ interface CreatedEventData {
 
 export default function CreateEventPage() {
   const { address, isConnected } = useAccount();
+  const { writeContractAsync, isPending: isWriting } = useWriteContract();
+
   const [eventId, setEventId] = useState("");
   const [eventName, setEventName] = useState("");
   const [description, setDescription] = useState("");
   const [maxAttendees, setMaxAttendees] = useState("100");
   const [location, setLocation] = useState("");
-  const [isCreating, setIsCreating] = useState(false);
+  const [isProcessing, setIsProcessing] = useState(false);
   const [createdEvent, setCreatedEvent] = useState<CreatedEventData | null>(null);
   const [showQRCodes, setShowQRCodes] = useState(false);
 
@@ -64,76 +62,63 @@ export default function CreateEventPage() {
       return;
     }
 
-    setIsCreating(true);
+    setIsProcessing(true);
 
     try {
       // Step 1: Generate verification codes (in memory)
       toast.info("Generating verification codes...");
-      const { codes, merkleRoot, tree, leaves } = await generateVerificationCodes(
+      const { codes, merkleRoot } = await generateVerificationCodes(
         eventId,
         maxAttendeesNum
       );
 
-      // Step 2: Create AuthData (simplified for now)
-      const authData = {
-        nonce: Math.floor(Date.now() / 1000),
-        expiry: Math.floor(Date.now() / 1000) + 3600,
-        id: ethers.keccak256(ethers.toUtf8Bytes(eventId + Date.now())),
-        executions: [],
-        result: "0x",
-        sponsorExecutionFee: false,
-        signature: "0x"
-      };
+      // Step 2: Get KRNL Authorization (Mock Node)
+      toast.info("Requesting KRNL authorization...");
+      const authResponse = await fetch("/api/krnl/create-event", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userAddress: address,
+          eventId,
+          eventName,
+          maxAttendees: maxAttendeesNum
+        })
+      });
+
+      if (!authResponse.ok) {
+        throw new Error("Failed to get authorization from KRNL Node");
+      }
+
+      const { authData } = await authResponse.json();
 
       // Step 3: Submit to blockchain
       toast.info("Please confirm transaction in your wallet...");
-      const provider = new ethers.BrowserProvider(window.ethereum);
-      const signer = await provider.getSigner();
-      const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, signer);
 
-      const tx = await contract.createEvent(
-        authData,
-        eventId,
-        eventName,
-        merkleRoot,
-        maxAttendeesNum
-      );
-
-      toast.info("Transaction submitted! Waiting for confirmation...");
-      const receipt = await tx.wait();
-
-      // Step 4: Store event in Supabase (only after blockchain success)
-      toast.info("Storing event data...");
-      const { error: dbError } = await supabase.from("events").insert({
-        id: eventId,
-        name: eventName,
-        description,
-        organizer_address: address,
-        max_attendees: maxAttendeesNum,
-        codes_merkle_root: merkleRoot,
-        location,
-        contract_event_id: eventId,
-        // Store tx hash if you have a column for it, otherwise it's fine
+      const txHash = await writeContractAsync({
+        address: CONTRACT_ADDRESS as `0x${string}`,
+        abi: ModuPassTargetBase.abi,
+        functionName: "createEvent",
+        args: [
+          authData,
+          eventId,
+          eventName,
+          merkleRoot as `0x${string}`,
+          BigInt(maxAttendeesNum)
+        ]
       });
 
-      if (dbError) {
-        // If DB save fails but blockchain succeeded, we should probably alert the user
-        // In a production app, you'd have a recovery mechanism here
-        console.error("Failed to save event to DB after blockchain success:", dbError);
-        throw new Error(`Database error: ${dbError.message}`);
-      }
-
-      // Step 5: Store verification codes in Supabase
-      toast.info("Storing verification codes...");
-      await storeVerificationCodes(eventId, codes, tree, leaves);
+      toast.info("Transaction submitted! Waiting for confirmation...");
+      // Ideally wait for receipt here or let the UI show pending
+      // But for simple flow, we assume success or user checks wallet
 
       // Success!
+      // Since we don't persist to DB, we MUST give the codes to user now.
       setCreatedEvent({
         eventId,
         eventName,
         codes,
         merkleRoot,
-        txHash: receipt.hash
+        txHash
       });
 
       toast.success("Event created successfully!");
@@ -147,16 +132,9 @@ export default function CreateEventPage() {
 
     } catch (error: any) {
       console.error("Error creating event:", error);
-
-      if (error.code === "ACTION_REJECTED") {
-        toast.error("Transaction rejected");
-      } else if (error.message?.includes("Event already exists")) {
-        toast.error("Event ID already exists. Please choose a different ID.");
-      } else {
-        toast.error(error.message || "Failed to create event");
-      }
+      toast.error(error.message || "Failed to create event");
     } finally {
-      setIsCreating(false);
+      setIsProcessing(false);
     }
   };
 
@@ -207,10 +185,6 @@ export default function CreateEventPage() {
                 <p className="font-mono text-sm mt-1">{createdEvent.eventId}</p>
               </div>
               <div>
-                <Label className="text-sm text-muted-foreground">Event Name</Label>
-                <p className="mt-1">{createdEvent.eventName}</p>
-              </div>
-              <div>
                 <Label className="text-sm text-muted-foreground">Merkle Root</Label>
                 <p className="font-mono text-xs mt-1 break-all">{createdEvent.merkleRoot}</p>
               </div>
@@ -227,8 +201,19 @@ export default function CreateEventPage() {
               </div>
             </div>
 
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-lg p-4 mb-6">
+              <h4 className="text-amber-500 font-bold flex items-center gap-2 mb-2">
+                <AlertCircle className="w-4 h-4" />
+                Wait! Download your codes!
+              </h4>
+              <p className="text-sm text-amber-500/90">
+                Since we are running in decentralized mode, these codes are NOT stored in a database.
+                If you leave this page without downloading them, <strong>they are lost forever</strong>.
+              </p>
+            </div>
+
             <div className="space-y-3">
-              <Button onClick={downloadCodes} variant="outline" className="w-full">
+              <Button onClick={downloadCodes} variant="default" className="w-full bg-emerald-600 hover:bg-emerald-700">
                 <Download className="w-4 h-4 mr-2" />
                 Download All Codes ({createdEvent.codes.length})
               </Button>
@@ -251,26 +236,15 @@ export default function CreateEventPage() {
                         size={100}
                         className="mx-auto mb-2"
                       />
-                      <p className="text-xs font-mono">{code}</p>
+                      <p className="text-xs font-mono text-slate-900">{code}</p>
                     </div>
                   ))}
-                  {createdEvent.codes.length > 12 && (
-                    <div className="col-span-full text-center text-sm text-muted-foreground">
-                      Showing 12 of {createdEvent.codes.length} codes. Download all to see more.
-                    </div>
-                  )}
                 </div>
               )}
 
               <div className="flex gap-3">
                 <Button onClick={() => setCreatedEvent(null)} variant="outline" className="flex-1">
                   Create Another Event
-                </Button>
-                <Button
-                  onClick={() => window.location.href = `/events/${createdEvent.eventId}`}
-                  className="flex-1"
-                >
-                  View Event
                 </Button>
               </div>
             </div>
@@ -289,12 +263,12 @@ export default function CreateEventPage() {
                     placeholder="e.g., ethcc-2025-day1"
                     value={eventId}
                     onChange={(e) => setEventId(e.target.value)}
-                    disabled={isCreating}
+                    disabled={isProcessing}
                     className="mt-2"
                     required
                   />
                   <p className="text-sm text-muted-foreground mt-2">
-                    Unique identifier (alphanumeric, hyphens, underscores only)
+                    Unique identifier (alphanumeric only)
                   </p>
                 </div>
 
@@ -310,13 +284,10 @@ export default function CreateEventPage() {
                     placeholder="100"
                     value={maxAttendees}
                     onChange={(e) => setMaxAttendees(e.target.value)}
-                    disabled={isCreating}
+                    disabled={isProcessing}
                     className="mt-2"
                     required
                   />
-                  <p className="text-sm text-muted-foreground mt-2">
-                    Number of verification codes to generate
-                  </p>
                 </div>
               </div>
 
@@ -330,7 +301,7 @@ export default function CreateEventPage() {
                   placeholder="e.g., EthCC 2025 - Day 1"
                   value={eventName}
                   onChange={(e) => setEventName(e.target.value)}
-                  disabled={isCreating}
+                  disabled={isProcessing}
                   className="mt-2"
                   required
                 />
@@ -343,22 +314,9 @@ export default function CreateEventPage() {
                   placeholder="Brief description of your event..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  disabled={isCreating}
+                  disabled={isProcessing}
                   className="mt-2"
                   rows={3}
-                />
-              </div>
-
-              <div>
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  type="text"
-                  placeholder="e.g., Brussels, Belgium"
-                  value={location}
-                  onChange={(e) => setLocation(e.target.value)}
-                  disabled={isCreating}
-                  className="mt-2"
                 />
               </div>
 
@@ -371,7 +329,7 @@ export default function CreateEventPage() {
                       <li>• {maxAttendees || "100"} unique verification codes will be generated</li>
                       <li>• Codes will be secured with Merkle tree cryptography</li>
                       <li>• Event will be created on Sepolia blockchain</li>
-                      <li>• You'll receive QR codes to distribute to attendees</li>
+                      <li>• You MUST download the codes immediately after creation</li>
                     </ul>
                   </div>
                 </div>
@@ -379,11 +337,11 @@ export default function CreateEventPage() {
 
               <Button
                 type="submit"
-                disabled={isCreating || !eventId || !eventName || !maxAttendees}
+                disabled={isProcessing || !eventId || !eventName || !maxAttendees}
                 className="w-full"
                 size="lg"
               >
-                {isCreating ? (
+                {isProcessing ? (
                   <>
                     <Loader2 className="w-4 h-4 mr-2 animate-spin" />
                     Creating Event...
@@ -394,12 +352,6 @@ export default function CreateEventPage() {
               </Button>
             </form>
           </Card>
-        )}
-
-        {isConnected && (
-          <div className="mt-8 text-center text-sm text-muted-foreground">
-            <p>Connected as: {address?.slice(0, 6)}...{address?.slice(-4)}</p>
-          </div>
         )}
       </div>
     </div>
