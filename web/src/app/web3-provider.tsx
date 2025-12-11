@@ -2,15 +2,16 @@
 
 import { type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { WagmiProvider, createConfig, http } from 'wagmi';
+import { WagmiProvider, createConfig } from '@privy-io/wagmi';
 import { sepolia } from 'wagmi/chains';
+import { http } from 'wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
 import { KRNLProvider } from '@krnl-dev/sdk-react-7702';
 import { krnlConfig } from '@/lib/krnl-config';
 
 const queryClient = new QueryClient();
 
-// Wagmi Config
+// Wagmi Config using @privy-io/wagmi
 const config = createConfig({
   chains: [sepolia],
   transports: {
