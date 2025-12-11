@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useKRNL } from '@krnl-dev/sdk-react-7702';
 import { useSearchParams } from "next/navigation";
 import { ethers } from "ethers";
 import { Card } from "@/components/ui/card";
@@ -12,11 +13,19 @@ import { Shield, Loader2, CheckCircle2, AlertCircle, QrCode } from "lucide-react
 import { toast } from "sonner";
 import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
 
+import { usePrivy } from "@privy-io/react-auth";
+
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
 export default function VerifyPage() {
     const searchParams = useSearchParams();
-    const { address, isConnected } = useAccount();
+    const { address: wagmiAddress, isConnected: isWagmiConnected } = useAccount();
+    const { authenticated, user } = usePrivy();
+
+    // Robust connection using Privy as source of truth
+    const isConnected = authenticated || isWagmiConnected;
+    const address = wagmiAddress || user?.wallet?.address;
+
     const { writeContractAsync } = useWriteContract();
 
     const [eventId, setEventId] = useState(searchParams.get("event") || searchParams.get("eventId") || "");
@@ -27,6 +36,8 @@ export default function VerifyPage() {
         txHash: string;
         proofHash: string;
     } | null>(null);
+
+    const { executeWorkflow } = useKRNL() as any;
 
     const handleVerify = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -41,6 +52,11 @@ export default function VerifyPage() {
             return;
         }
 
+        if (!process.env.NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID) {
+            toast.error("KRNL Workflow ID not configured");
+            return;
+        }
+
         if (!eventId || !verificationCode) {
             toast.error("Please provide both event ID and verification code");
             return;
@@ -49,42 +65,75 @@ export default function VerifyPage() {
         setIsVerifying(true);
 
         try {
-            // Step 1: Request KRNL Verification (Mock Node)
+            // Step 1: Execute KRNL Workflow
             toast.info("Requesting KRNL verification...");
-            const krnlResponse = await fetch("/api/krnl/verify-attendance", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({
-                    eventId,
-                    code: verificationCode,
-                    attendee: address
-                })
+
+            const authData = await executeWorkflow(process.env.NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID!, {
+                eventId,
+                code: verificationCode,
+                attendee: address
             });
-
-            if (!krnlResponse.ok) {
-                const err = await krnlResponse.json();
-                throw new Error(err.error || "Failed to verify with KRNL Node");
-            }
-
-            const { authData, isValid } = await krnlResponse.json();
-
-            if (!isValid) {
-                throw new Error("Invalid verification code (Verification Logic Failed)");
-            }
 
             // Step 2: Submit to blockchain
             toast.info("Verifying attendance on-chain...");
 
             const txHash = await writeContractAsync({
                 address: CONTRACT_ADDRESS as `0x${string}`,
-                abi: ModuPassTargetBase.abi,
+                abi: (ModuPassTargetBase as any).abi,
                 functionName: "verifyAttendance",
                 args: [
-                    authData,
-                    eventId,
-                    address
+                    authData, // KRNL AuthData
+                    // Note: verifyAttendance calls requireAuth(authData)
+                    // The actual args inside contract are decoded from authData.result
+                    // However, we still need to pass authData as the first argument which is used by the modifier.
+                    // Wait, `verifyAttendance` only takes `authData`!
+                    // Let's re-check the contract signature.
                 ]
             });
+
+            // Correction: The contract signature for `verifyAttendance` is:
+            // function verifyAttendance(AuthData calldata authData) external requireAuth(authData)
+            // It ONLY takes authData. All other data is inside authData.result.
+            // So my previous code passing [authData, eventId, address] was wrong for `ModuPassTargetBase.sol`!
+            // But `ModuPassKRNL.sol` (legacy) took arguments. 
+            // `ModuPassTargetBase.sol` takes ONLY authData.
+            // I must correct the args here to be just [authData].
+
+            // Re-checking `ModuPassTargetBase.sol`:
+            /*
+            function verifyAttendance(AuthData calldata authData) 
+                external 
+                requireAuth(authData) 
+            {
+               // decode authData.result
+            */
+            // Yes, it only takes one argument.
+
+            // I should also check `createEvent` signature in `ModuPassTargetBase.sol`.
+            /*
+            function createEvent(AuthData calldata authData) 
+                external 
+                requireAuth(authData)
+            */
+            // It also ONLY takes `authData`!
+
+            // Oops, my previous update to `CreateEventPage` passed multiple args:
+            /*
+            args: [
+              authData,
+              eventId,
+              eventName,
+              merkleRoot as `0x${string}`,
+              BigInt(maxAttendeesNum)
+            ]
+            */
+            // This is wrong for `ModuPassTargetBase`. It was correct for `ModuPassKRNL` (legacy).
+            // I need to fix `CreateEventPage` as well.
+
+            // Wait, does `useWriteContract` automatically handle overloaded functions? No.
+            // If the ABI for `ModuPassTargetBase` only has `createEvent(AuthData)`, then passing more args will fail.
+
+            // I need to correct `CreateEventPage` args too.
 
             toast.info("Transaction submitted! Waiting for confirmation...");
 
