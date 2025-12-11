@@ -100,3 +100,10 @@ USE_THIS_CONTRACT.md
 # Misc
 .vercel
 .netlify
+# Test files
+web/src/lib/test-krnl.ts
+contracts/scripts/test-contract.js
+contracts/scripts/test-contract.ts
+
+# Generated ABI files
+*_ABI_UPDATED.json
