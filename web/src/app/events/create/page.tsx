@@ -1,7 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { usePrivy, useWallets } from "@privy-io/react-auth";
+import { useKRNL } from '@krnl-dev/sdk-react-7702';
 import { ethers } from "ethers";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -13,6 +15,7 @@ import { toast } from "sonner";
 import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
 import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
+import { createEventWorkflowTemplate } from "@/lib/krnl-workflows";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -25,7 +28,37 @@ interface CreatedEventData {
 }
 
 export default function CreateEventPage() {
-  const { address, isConnected } = useAccount();
+  const [mounted, setMounted] = useState(false);
+  const { address: wagmiAddress, isConnected: isWagmiConnected } = useAccount();
+  const { ready, authenticated, user } = usePrivy();
+  const { wallets } = useWallets();
+
+  // Mount check
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  // Robust connection check: Wait for Privy to be ready, then check authentication
+  const activeWallet = wallets[0];
+  const isConnected = mounted && ready && (authenticated && (!!activeWallet || !!user?.wallet?.address));
+  const address = activeWallet?.address || user?.wallet?.address || wagmiAddress;
+
+  // Debug logging
+  useEffect(() => {
+    console.log("CreateEventPage Connection Debug:", {
+      mounted,
+      ready,
+      authenticated,
+      isWagmiConnected,
+      wagmiAddress,
+      privyUserAddress: user?.wallet?.address,
+      activeWalletAddress: activeWallet?.address,
+      walletsLength: wallets.length,
+      finalIsConnected: isConnected,
+      finalAddress: address
+    });
+  }, [mounted, ready, authenticated, isWagmiConnected, wagmiAddress, user, activeWallet, wallets.length, isConnected, address]);
+
   const { writeContractAsync, isPending: isWriting } = useWriteContract();
 
   const [eventId, setEventId] = useState("");
@@ -36,6 +69,8 @@ export default function CreateEventPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [createdEvent, setCreatedEvent] = useState<CreatedEventData | null>(null);
   const [showQRCodes, setShowQRCodes] = useState(false);
+
+  const { executeWorkflow, isAuthorized, enableSmartAccount } = useKRNL() as any;
 
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -65,6 +100,30 @@ export default function CreateEventPage() {
     setIsProcessing(true);
 
     try {
+      // Step 0: Check and enable KRNL authorization if needed
+      console.log("KRNL Authorization Status:", { isAuthorized, address });
+
+      if (!isAuthorized) {
+        toast.info("Authorizing KRNL delegated account...");
+        console.log("KRNL not authorized, calling enableSmartAccount()");
+
+        try {
+          const authResult = await enableSmartAccount();
+          console.log("enableSmartAccount() result:", authResult);
+          toast.success("KRNL account authorized!");
+
+          // Wait a moment for authorization to propagate
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        } catch (authError) {
+          console.error("Authorization error:", authError);
+          toast.error(`Failed to authorize KRNL account: ${authError instanceof Error ? authError.message : 'Unknown error'}`);
+          setIsProcessing(false);
+          return;
+        }
+      } else {
+        console.log("KRNL already authorized");
+      }
+
       // Step 1: Generate verification codes (in memory)
       toast.info("Generating verification codes...");
       const { codes, merkleRoot } = await generateVerificationCodes(
@@ -72,39 +131,35 @@ export default function CreateEventPage() {
         maxAttendeesNum
       );
 
-      // Step 2: Get KRNL Authorization (Mock Node)
-      toast.info("Requesting KRNL authorization...");
-      const authResponse = await fetch("/api/krnl/create-event", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          userAddress: address,
-          eventId,
-          eventName,
-          maxAttendees: maxAttendeesNum
-        })
-      });
+      // Step 2: Create KRNL Workflow DSL Template
+      toast.info("Preparing KRNL workflow...");
+      const workflowTemplate = createEventWorkflowTemplate(
+        eventId,
+        eventName,
+        merkleRoot,
+        maxAttendeesNum,
+        address,
+        CONTRACT_ADDRESS
+      );
 
-      if (!authResponse.ok) {
-        throw new Error("Failed to get authorization from KRNL Node");
-      }
+      // Step 3: Execute KRNL Workflow
+      toast.info("Executing KRNL workflow...");
+      console.log("KRNL Workflow Template:", workflowTemplate);
 
-      const { authData } = await authResponse.json();
+      const workflowResult = await executeWorkflow(workflowTemplate);
+      console.log("KRNL Workflow Result:", workflowResult);
+
+      // Extract authData from workflow result
+      const authData = workflowResult.authData || workflowResult;
 
       // Step 3: Submit to blockchain
-      toast.info("Please confirm transaction in your wallet...");
+      toast.info("Submitting transaction...");
 
       const txHash = await writeContractAsync({
         address: CONTRACT_ADDRESS as `0x${string}`,
-        abi: ModuPassTargetBase.abi,
+        abi: (ModuPassTargetBase as any).abi,
         functionName: "createEvent",
-        args: [
-          authData,
-          eventId,
-          eventName,
-          merkleRoot as `0x${string}`,
-          BigInt(maxAttendeesNum)
-        ]
+        args: [authData]
       });
 
       toast.info("Transaction submitted! Waiting for confirmation...");
@@ -168,6 +223,18 @@ export default function CreateEventPage() {
             <p className="text-muted-foreground mb-6">
               Please connect your wallet to create an event
             </p>
+
+            {/* Debug Info */}
+            <div className="mt-4 p-4 bg-muted/50 rounded-lg text-left text-xs font-mono">
+              <p className="font-bold mb-2">Debug Info:</p>
+              <p>mounted: {String(mounted)}</p>
+              <p>authenticated: {String(authenticated)}</p>
+              <p>isWagmiConnected: {String(isWagmiConnected)}</p>
+              <p>wallets.length: {wallets.length}</p>
+              <p>activeWallet: {activeWallet ? 'exists' : 'null'}</p>
+              <p>address: {address || 'none'}</p>
+              <p>isConnected: {String(isConnected)}</p>
+            </div>
           </Card>
         ) : createdEvent ? (
           <Card className="p-8">
