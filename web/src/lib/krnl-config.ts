@@ -13,5 +13,5 @@ export const krnlConfig = createConfig({
   chain: sepolia,
   delegatedContractAddress: process.env.NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS as `0x${string}`,
   privyAppId: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
-  krnlNodeUrl: process.env.NEXT_PUBLIC_KRNL_NODE_URL || 'https://v0-1-0.node.lat/',
+  krnlNodeUrl: process.env.NEXT_PUBLIC_KRNL_NODE_URL || 'https://node.krnl.xyz',
 });
