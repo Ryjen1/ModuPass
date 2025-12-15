@@ -134,9 +134,14 @@ export default function CreateEventPage() {
 
     try {
       // Step 0: Check and enable KRNL authorization if needed
-      console.log("KRNL Authorization Status:", { isAuthorized, address });
+      // BYPASS MODE: Skip authorization and workflow for testing UI
+      const BYPASS_MODE = true;
 
-      if (isAuthorized === false) { // Explicit false check
+      if (BYPASS_MODE) {
+        console.warn("⚠️ RUNNING IN BYPASS MODE: KRNL Auth & Contract calls will be skipped.");
+        toast.info("Bypass Mode: Simulating successful event creation...");
+        await new Promise(resolve => setTimeout(resolve, 1500)); // Fake network delay
+      } else if (isAuthorized === false) { // Explicit false check
         toast.info("Authorizing KRNL delegated account...");
         console.log("KRNL not authorized, calling enableSmartAccount()...");
 
@@ -174,40 +179,44 @@ export default function CreateEventPage() {
         maxAttendeesNum
       );
 
-      // Step 2: Create KRNL Workflow DSL Template
-      toast.info("Preparing KRNL workflow...");
-      const workflowTemplate = createEventWorkflowTemplate(
-        eventId,
-        eventName,
-        merkleRoot,
-        maxAttendeesNum,
-        address, // Use active wallet address
-        CONTRACT_ADDRESS
-      );
+      let txHash = "0x_bypass_simulation_" + Date.now();
 
-      // Step 3: Execute KRNL Workflow
-      toast.info("Executing KRNL workflow...");
-      console.log("KRNL Workflow Template:", workflowTemplate);
+      if (!BYPASS_MODE) {
+        // Step 2: Create KRNL Workflow DSL Template
+        toast.info("Preparing KRNL workflow...");
+        const workflowTemplate = createEventWorkflowTemplate(
+          eventId,
+          eventName,
+          merkleRoot,
+          maxAttendeesNum,
+          address, // Use active wallet address
+          CONTRACT_ADDRESS
+        );
 
-      if (!executeWorkflow) {
-        throw new Error("executeWorkflow function missing from KRNL SDK");
+        // Step 3: Execute KRNL Workflow
+        toast.info("Executing KRNL workflow...");
+        console.log("KRNL Workflow Template:", workflowTemplate);
+
+        if (!executeWorkflow) {
+          throw new Error("executeWorkflow function missing from KRNL SDK");
+        }
+
+        const workflowResult = await executeWorkflow(workflowTemplate);
+        console.log("KRNL Workflow Result:", workflowResult);
+
+        // Extract authData
+        const authData = workflowResult.authData || workflowResult;
+
+        // Step 4: Submit to blockchain
+        toast.info("Submitting transaction...");
+
+        txHash = await writeContractAsync({
+          address: CONTRACT_ADDRESS as `0x${string}`,
+          abi: (ModuPassTargetBase as any).abi,
+          functionName: "createEvent",
+          args: [authData]
+        });
       }
-
-      const workflowResult = await executeWorkflow(workflowTemplate);
-      console.log("KRNL Workflow Result:", workflowResult);
-
-      // Extract authData
-      const authData = workflowResult.authData || workflowResult;
-
-      // Step 4: Submit to blockchain
-      toast.info("Submitting transaction...");
-
-      const txHash = await writeContractAsync({
-        address: CONTRACT_ADDRESS as `0x${string}`,
-        abi: (ModuPassTargetBase as any).abi,
-        functionName: "createEvent",
-        args: [authData]
-      });
 
       toast.success("Event created successfully!");
 
