@@ -40,6 +40,8 @@ export function Web3Provider({ children }: { children: ReactNode }) {
           accentColor: '#10b981',
           logo: 'https://modupass.app/logo.png',
         },
+        supportedChains: [sepolia],
+        defaultChain: sepolia,
         embeddedWallets: {
           createOnLogin: 'all-users',
           noPromptOnSignature: true,

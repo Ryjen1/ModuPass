@@ -1,9 +1,14 @@
+import { KRNL_DAPP_ID, KRNL_ACCESS_TOKEN } from "./krnl-config";
+
 /**
  * KRNL Workflow DSL Template for Event Creation
  * This template defines the workflow for creating events with KRNL authorization
  */
 
 export interface KRNLWorkflowTemplate {
+    kernelIds?: number[];
+    dappId?: number;
+    accessToken?: string;
     chain_id: number;
     sender: string;
     contract: string;
@@ -13,25 +18,14 @@ export interface KRNLWorkflowTemplate {
     value: string;
     rpc_url: string;
     gas_limit: string;
-    workflow?: {
-        steps: Array<{
-            name: string;
-            type: string;
-            inputs?: Record<string, any>;
-            outputs?: Record<string, any>;
-        }>;
-    };
+    // ...
 }
 
 /**
  * Create a KRNL workflow template for event creation
  * @param eventId - Unique event identifier
  * @param eventName - Name of the event
- * @param merkleRoot - Merkle root of verification codes
- * @param maxAttendees - Maximum number of attendees
- * @param senderAddress - Address of the event creator
- * @param contractAddress - ModuPassTargetBase contract address
- * @returns KRNL workflow DSL template
+// ... (keeping comments)
  */
 export function createEventWorkflowTemplate(
     eventId: string,
@@ -42,6 +36,9 @@ export function createEventWorkflowTemplate(
     contractAddress: string
 ): KRNLWorkflowTemplate {
     return {
+        kernelIds: [337],
+        dappId: KRNL_DAPP_ID, // Inject manually to ensure it's there
+        accessToken: KRNL_ACCESS_TOKEN, // Inject manually to ensure it's there
         chain_id: 11155111, // Sepolia
         sender: senderAddress,
         contract: contractAddress,
@@ -60,39 +57,20 @@ export function createEventWorkflowTemplate(
         rpc_url: process.env.NEXT_PUBLIC_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
         gas_limit: "500000",
         workflow: {
+            // Minimal pass-through workflow to satisfy validation
             steps: [
                 {
-                    name: "validate_event_data",
-                    type: "validation",
-                    inputs: {
-                        eventId,
-                        eventName,
-                        maxAttendees
-                    },
-                    outputs: {
-                        validated: true
-                    }
-                },
-                {
-                    name: "prepare_auth_data",
-                    type: "auth_preparation",
-                    inputs: {
-                        eventId,
-                        eventName,
-                        codesMerkleRoot: merkleRoot,
-                        maxAttendees
-                    },
-                    outputs: {
-                        authData: "prepared"
-                    }
-                },
-                {
                     name: "execute_create_event",
-                    type: "contract_call",
+                    type: "contract_call", // Standard type
                     inputs: {
                         contract: contractAddress,
                         function: "createEvent",
-                        authData: "$steps.prepare_auth_data.outputs.authData"
+                        parameters: [
+                            eventId,
+                            eventName,
+                            merkleRoot,
+                            maxAttendees
+                        ]
                     }
                 }
             ]

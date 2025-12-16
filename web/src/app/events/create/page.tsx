@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount, useWriteContract, useBalance } from "wagmi";
+import { formatEther } from "viem";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useKRNL } from '@krnl-dev/sdk-react-7702';
 import { Card } from "@/components/ui/card";
@@ -15,6 +16,7 @@ import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
 import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
 import { createEventWorkflowTemplate } from "@/lib/krnl-workflows";
+import { krnlConfig, KRNL_DAPP_ID, KRNL_ENTRY_KEY, KRNL_ACCESS_TOKEN } from "@/lib/krnl-config";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -24,6 +26,15 @@ interface CreatedEventData {
   codes: string[];
   merkleRoot: string;
   txHash: string;
+}
+
+function WalletBalance({ address }: { address: `0x${string}` }) {
+  const { data, isError, isLoading } = useBalance({ address });
+  if (isLoading) return <span>Loading...</span>;
+  if (isError) return <span>Error</span>;
+  return <span className={data?.value === 0n ? "text-red-500 font-bold" : "text-emerald-500 font-bold"}>
+    {data ? formatEther(data.value).slice(0, 6) : "0"} {data?.symbol}
+  </span>;
 }
 
 export default function CreateEventPage() {
@@ -68,9 +79,12 @@ export default function CreateEventPage() {
     setMounted(true);
   }, []);
 
+
+
   // Debug logging
   useEffect(() => {
     if (!mounted) return;
+    console.log("🚀 KRNL DEBUG - V2.1 (String Token) 🚀");
     console.log("CreateEventPage Connection Debug:", {
       mounted,
       ready,
@@ -81,7 +95,14 @@ export default function CreateEventPage() {
       isAuthorized, // KRNL status
       isConnected,
       address,
-      krnlHookDump: krnlHook // DUMP THE WHOLE HOOK STATE
+      krnlHookDump: krnlHook, // DUMP THE WHOLE HOOK STATE
+
+      // CONFIG CHECK
+      configDebug: {
+        dappId: krnlConfig.dappId,
+        entryKey: krnlConfig.entryKey ? "LOADED" : "MISSING",
+        accessToken: krnlConfig.accessToken ? `LOADED (${krnlConfig.accessToken.slice(0, 10)}...)` : "MISSING"
+      }
     });
   }, [mounted, ready, authenticated, embeddedWallet, activeWallet, isAuthorized, isConnected, address, krnlHook]);
 
@@ -135,7 +156,7 @@ export default function CreateEventPage() {
     try {
       // Step 0: Check and enable KRNL authorization if needed
       // BYPASS MODE: Skip authorization and workflow for testing UI
-      const BYPASS_MODE = true;
+      const BYPASS_MODE = false;
 
       if (BYPASS_MODE) {
         console.warn("⚠️ RUNNING IN BYPASS MODE: KRNL Auth & Contract calls will be skipped.");
@@ -204,8 +225,16 @@ export default function CreateEventPage() {
         const workflowResult = await executeWorkflow(workflowTemplate);
         console.log("KRNL Workflow Result:", workflowResult);
 
+        if (workflowResult && workflowResult.success === false) {
+          throw new Error(`KRNL Workflow Rejected: ${workflowResult.error || "Unknown Error"}`);
+        }
+
         // Extract authData
         const authData = workflowResult.authData || workflowResult;
+
+        if (!authData) {
+          throw new Error("No authData returned from KRNL workflow");
+        }
 
         // Step 4: Submit to blockchain
         toast.info("Submitting transaction...");
@@ -421,13 +450,57 @@ export default function CreateEventPage() {
               <div className="bg-muted/30 rounded-lg p-4">
                 <h4 className="font-medium mb-1 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 text-primary" />
-                  Important Info
+                  KRNL Gas Requirement
                 </h4>
-                <p className="text-sm text-muted-foreground">
-                  KRNL requires ETH in your <strong>Embedded Wallet</strong> (not just MetaMask).
-                  <br />
-                  Check the console (F12) for your Embedded Wallet address and fund it.
-                </p>
+                <div className="text-sm text-muted-foreground space-y-2">
+                  <p>
+                    KRNL requires ETH in your <strong>Embedded Wallet</strong> (not your browser wallet).
+                  </p>
+
+                  {embeddedWallet ? (
+                    <div className="bg-background border rounded p-3 mt-2">
+                      <p className="text-xs font-mono mb-1">Embedded Wallet Address:</p>
+                      <p className="font-mono font-bold text-xs break-all select-all flex items-center gap-2">
+                        {embeddedWallet.address}
+                        {/* Copy button would go here */}
+                      </p>
+
+                      <div className="mt-2 text-xs flex items-center gap-2">
+                        <span className="text-muted-foreground">Balance:</span>
+                        <WalletBalance address={embeddedWallet.address as `0x${string}`} />
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-amber-500 text-xs">No embedded wallet found.</p>
+                  )}
+
+                  <p className="text-xs pt-2">
+                    👉 Send <strong>0.01 Sepolia ETH</strong> to the address above.
+                  </p>
+                </div>
+              </div>
+
+              {/* Config Debug UI */}
+              <div className="bg-slate-900 rounded-lg p-3 text-xs font-mono space-y-1 border border-slate-800">
+                <p className="text-muted-foreground font-bold mb-2 uppercase tracking-wider">KRNL Config Status</p>
+                <div className="flex justify-between">
+                  <span>dApp ID:</span>
+                  <span className={KRNL_DAPP_ID ? "text-emerald-400" : "text-red-400"}>
+                    {KRNL_DAPP_ID ? `✅ Loaded (${KRNL_DAPP_ID})` : "❌ MISSING"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Entry Key:</span>
+                  <span className={KRNL_ENTRY_KEY ? "text-emerald-400" : "text-red-400"}>
+                    {KRNL_ENTRY_KEY ? "✅ Loaded" : "❌ MISSING"}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Access Token:</span>
+                  <span className={KRNL_ACCESS_TOKEN ? "text-emerald-400" : "text-red-400"}>
+                    {KRNL_ACCESS_TOKEN ? `✅ Loaded (${KRNL_ACCESS_TOKEN.substring(0, 6)}...)` : "❌ MISSING"}
+                  </span>
+                </div>
               </div>
 
               <Button
