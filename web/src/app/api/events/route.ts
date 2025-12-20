@@ -32,7 +32,7 @@ export async function GET() {
       const created = e.createdAt as bigint;
 
       const toIso = (value: bigint) =>
-        value === 0n ? null : new Date(Number(value) * 1000).toISOString();
+        value === BigInt(0) ? null : new Date(Number(value) * 1000).toISOString();
 
       return {
         id: e.id as string,
@@ -84,9 +84,9 @@ export async function POST(req: NextRequest) {
     }
 
     const parseIsoToSeconds = (value: string | null | undefined): bigint => {
-      if (!value) return 0n;
+      if (!value) return BigInt(0);
       const ms = Date.parse(value);
-      if (Number.isNaN(ms)) return 0n;
+      if (Number.isNaN(ms)) return BigInt(0);
       return BigInt(Math.floor(ms / 1000));
     };
 

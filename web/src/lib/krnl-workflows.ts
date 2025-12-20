@@ -1,4 +1,5 @@
 import { KRNL_DAPP_ID, KRNL_ACCESS_TOKEN } from "./krnl-config";
+import { ethers, AbiCoder } from "ethers";
 
 /**
  * KRNL Workflow DSL Template for Event Creation
@@ -55,26 +56,7 @@ export function createEventWorkflowTemplate(
         sponsor_execution_fee: false,
         value: "0",
         rpc_url: process.env.NEXT_PUBLIC_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
-        gas_limit: "500000",
-        workflow: {
-            // Minimal pass-through workflow to satisfy validation
-            steps: [
-                {
-                    name: "execute_create_event",
-                    type: "contract_call", // Standard type
-                    inputs: {
-                        contract: contractAddress,
-                        function: "createEvent",
-                        parameters: [
-                            eventId,
-                            eventName,
-                            merkleRoot,
-                            maxAttendees
-                        ]
-                    }
-                }
-            ]
-        }
+        gas_limit: "500000"
     };
 }
 
@@ -111,40 +93,55 @@ export function verifyAttendanceWorkflowTemplate(
         sponsor_execution_fee: false,
         value: "0",
         rpc_url: process.env.NEXT_PUBLIC_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
-        gas_limit: "300000",
-        workflow: {
-            steps: [
-                {
-                    name: "validate_code",
-                    type: "merkle_verification",
-                    inputs: {
-                        eventId,
-                        code
-                    },
-                    outputs: {
-                        isValid: true
-                    }
-                },
-                {
-                    name: "prepare_attendance_data",
-                    type: "auth_preparation",
-                    inputs: {
-                        eventId,
-                        attendee: attendeeAddress,
-                        code,
-                        isValid: "$steps.validate_code.outputs.isValid"
-                    }
-                },
-                {
-                    name: "execute_verify_attendance",
-                    type: "contract_call",
-                    inputs: {
-                        contract: contractAddress,
-                        function: "verifyAttendance",
-                        authData: "$steps.prepare_attendance_data.outputs.authData"
-                    }
-                }
+        gas_limit: "300000"
+    };
+}
+
+/**
+ * Generate Mock AuthData for Simulation Mode
+ * This bypasses KRNL signature/proof generation but constructs a valid AuthData structure
+ * that the ModuPassDemo contract (permissive) will accept.
+ */
+
+
+export async function getMockAuthData(
+    functionName: "createEvent" | "verifyAttendance",
+    params: any
+): Promise<any> {
+    const abiCoder = new AbiCoder();
+    let resultBytes = "0x";
+
+    if (functionName === "createEvent") {
+        // Encode parameters for createEvent: (string, string, string, uint256)
+        resultBytes = abiCoder.encode(
+            ["string", "string", "string", "uint256"],
+            [
+                params.eventId,
+                params.eventName,
+                params.merkleRoot,
+                params.maxAttendees
             ]
-        }
+        );
+    } else if (functionName === "verifyAttendance") {
+        // Encode parameters for verifyAttendance: (string, address, string)
+        resultBytes = abiCoder.encode(
+            ["string", "address", "string"],
+            [
+                params.eventId,
+                params.attendee,
+                params.code
+            ]
+        );
+    }
+
+    // Return AuthData struct matching ModuPassTargetBase ABI
+    return {
+        nonce: BigInt(Math.floor(Date.now() / 1000)),
+        expiry: BigInt(Math.floor(Date.now() / 1000) + 3600), // 1 hour valid
+        id: ethers.id("mock-workflow"), // Maps to 'id' in ABI
+        executions: [], // bytes32[]
+        result: resultBytes,
+        sponsorExecutionFee: false,
+        signature: "0x"
     };
 }

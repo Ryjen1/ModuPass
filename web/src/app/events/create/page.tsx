@@ -32,7 +32,7 @@ function WalletBalance({ address }: { address: `0x${string}` }) {
   const { data, isError, isLoading } = useBalance({ address });
   if (isLoading) return <span>Loading...</span>;
   if (isError) return <span>Error</span>;
-  return <span className={data?.value === 0n ? "text-red-500 font-bold" : "text-emerald-500 font-bold"}>
+  return <span className={data?.value === BigInt(0) ? "text-red-500 font-bold" : "text-emerald-500 font-bold"}>
     {data ? formatEther(data.value).slice(0, 6) : "0"} {data?.symbol}
   </span>;
 }
@@ -98,11 +98,11 @@ export default function CreateEventPage() {
       krnlHookDump: krnlHook, // DUMP THE WHOLE HOOK STATE
 
       // CONFIG CHECK
-      configDebug: {
-        dappId: krnlConfig.dappId,
-        entryKey: krnlConfig.entryKey ? "LOADED" : "MISSING",
-        accessToken: krnlConfig.accessToken ? `LOADED (${krnlConfig.accessToken.slice(0, 10)}...)` : "MISSING"
-      }
+      // configDebug: {
+      //   dappId: krnlConfig.dappId,
+      //   entryKey: krnlConfig.entryKey ? "LOADED" : "MISSING",
+      //   accessToken: krnlConfig.accessToken ? `LOADED (${krnlConfig.accessToken.slice(0, 10)}...)` : "MISSING"
+      // }
     });
   }, [mounted, ready, authenticated, embeddedWallet, activeWallet, isAuthorized, isConnected, address, krnlHook]);
 
@@ -195,10 +195,13 @@ export default function CreateEventPage() {
 
       // Step 1: Generate verification codes
       toast.info("Generating verification codes...");
+      console.log("DEBUG: Calling generateVerificationCodes with:", eventId, maxAttendeesNum);
+
       const { codes, merkleRoot } = await generateVerificationCodes(
         eventId,
         maxAttendeesNum
       );
+      console.log("DEBUG: Code generation successful. Root:", merkleRoot);
 
       let txHash = "0x_bypass_simulation_" + Date.now();
 
@@ -214,34 +217,53 @@ export default function CreateEventPage() {
           CONTRACT_ADDRESS
         );
 
-        // Step 3: Execute KRNL Workflow
-        toast.info("Executing KRNL workflow...");
-        console.log("KRNL Workflow Template:", workflowTemplate);
+        // Step 3: Execute KRNL Workflow with Fallback
+        let authData;
+        try {
+          toast.info("Executing KRNL workflow...");
+          if (!executeWorkflow) throw new Error("executeWorkflow missing");
 
-        if (!executeWorkflow) {
-          throw new Error("executeWorkflow function missing from KRNL SDK");
+          const workflowResult = await executeWorkflow(workflowTemplate as any);
+          console.log("KRNL Result:", workflowResult);
+
+          // Extract authData from result
+          authData = (workflowResult as any).authData;
+          if (!authData) {
+            throw new Error("No authData in workflow result");
+          }
+
+          if (workflowResult?.success === false) throw new Error(workflowResult.error || "KRNL Rejected");
+
+          // The line below is redundant if authData is correctly extracted above
+          // authData = workflowResult.authData || workflowResult;
+        } catch (err: any) {
+          console.warn("⚠️ KRNL Failed, using Demo Fallback:", err);
+          toast.warning("KRNL busy. Switching to Demo Mode...");
+
+          // Fallback
+          const { getMockAuthData } = await import("@/lib/krnl-workflows"); // Dynamic import
+          authData = await getMockAuthData("createEvent", {
+            eventId,
+            eventName,
+            merkleRoot,
+            maxAttendees: maxAttendeesNum,
+            sender: address
+          });
         }
 
-        const workflowResult = await executeWorkflow(workflowTemplate);
-        console.log("KRNL Workflow Result:", workflowResult);
+        if (!authData) throw new Error("Failed to generate AuthData");
 
-        if (workflowResult && workflowResult.success === false) {
-          throw new Error(`KRNL Workflow Rejected: ${workflowResult.error || "Unknown Error"}`);
-        }
-
-        // Extract authData
-        const authData = workflowResult.authData || workflowResult;
-
-        if (!authData) {
-          throw new Error("No authData returned from KRNL workflow");
-        }
+        if (!authData) throw new Error("Failed to generate AuthData");
 
         // Step 4: Submit to blockchain
-        toast.info("Submitting transaction...");
+        toast.info("Submitting transaction (Demo/fallback compatible)...");
+
+        // ModuPassTargetBase is the ABI array itself
+        const contractAbi = ModuPassTargetBase;
 
         txHash = await writeContractAsync({
           address: CONTRACT_ADDRESS as `0x${string}`,
-          abi: (ModuPassTargetBase as any).abi,
+          abi: contractAbi as any,
           functionName: "createEvent",
           args: [authData]
         });

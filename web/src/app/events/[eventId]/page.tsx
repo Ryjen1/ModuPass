@@ -8,7 +8,7 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar, Users, Shield, ArrowLeft, ExternalLink, Loader2 } from "lucide-react";
 import Link from "next/link";
-import { ethers } from "ethers";
+
 
 // ... imports
 
@@ -57,7 +57,7 @@ export default function EventDetailPage() {
 
             // 1. Fetch Event Details
             // returns (eventId, eventName, organizer, createdAt, isActive)
-            const details = await contract.getEvent(eventId);
+            const details = await contract.getEvent(eventId) as any;
 
             // 2. Fetch Attendees
             const attendees = await contract.getEventAttendees(eventId);

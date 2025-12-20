@@ -28,7 +28,7 @@ async function check() {
         if (symbol === 'WETH' || name.includes('Wrapped')) {
             console.log("❌ CRITICAL: This is WETH! This is NOT the KRNL Kernel contract.");
         }
-    } catch (err) {
+    } catch (err: any) {
         console.log("⚠️ Could not read name/symbol. (Might not be an ERC-20, which is GOOD if it's a kernel)");
         console.log("Error:", err.message);
     }

@@ -20,7 +20,8 @@ const config = createConfig({
 });
 
 export function Web3Provider({ children }: { children: ReactNode }) {
-  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID;
+  // Use env var if available, fallback to hardcoded value for build
+  const appId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmikgobrw03dzkw0bj7jkhy8a";
 
   if (!appId) {
     return (
@@ -43,8 +44,9 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         supportedChains: [sepolia],
         defaultChain: sepolia,
         embeddedWallets: {
-          createOnLogin: 'all-users',
-          noPromptOnSignature: true,
+          ethereum: {
+            createOnLogin: 'all-users',
+          },
         },
         externalWallets: {
           // CRITICAL: KRNL requires EIP-7702 which only Privy Embedded Wallets support right now.
