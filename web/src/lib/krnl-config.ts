@@ -1,13 +1,9 @@
 import { createConfig } from '@krnl-dev/sdk-react-7702';
 import { sepolia } from 'viem/chains';
 
-if (!process.env.NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS) {
-  throw new Error('NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS is required');
-}
-
-if (!process.env.NEXT_PUBLIC_PRIVY_APP_ID) {
-  throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is required');
-}
+// Provide fallback values for build time to prevent static generation crashes
+const delegatedAddress = process.env.NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS || "0x0000000000000000000000000000000000000000";
+const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmikgobrw03dzkw0bj7jkhy8a";
 
 // Export constants for UI validation (Moved OUTSIDE the object)
 export const KRNL_DAPP_ID = 9860;
@@ -16,8 +12,8 @@ export const KRNL_ACCESS_TOKEN = "0x4401f104994510bf927e43f0ec95220e0ba711844085
 
 export const krnlConfig = createConfig({
   chain: sepolia,
-  delegatedContractAddress: process.env.NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS as `0x${string}`,
-  privyAppId: process.env.NEXT_PUBLIC_PRIVY_APP_ID,
+  delegatedContractAddress: delegatedAddress as `0x${string}`,
+  privyAppId: privyAppId,
   krnlNodeUrl: 'https://node.krnl.xyz',
   // @ts-ignore - Types are missing these fields but runtime uses them
   dappId: KRNL_DAPP_ID,
