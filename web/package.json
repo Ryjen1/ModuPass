@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "node fix-krnl-sdk.js && next build --webpack",
     "start": "next start",
     "lint": "eslint"
   },
@@ -21,10 +21,10 @@
     "kernel": "file:../kernel",
     "lucide-react": "^0.554.0",
     "merkletreejs": "^0.6.0",
-    "next": "16.0.3",
+    "next": "^16.1.0",
     "qrcode.react": "^4.2.0",
-    "react": "19.2.0",
-    "react-dom": "19.2.0",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
     "sonner": "^2.0.7",
     "uuid": "^13.0.0",
     "viem": "^2.41.2",

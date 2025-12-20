@@ -3,12 +3,12 @@ import path from "path";
 
 const nextConfig: NextConfig = {
   reactCompiler: true,
-  turbopack: {
-    // Treat the ModuPass repo as the workspace root instead of your home directory.
-    root: path.join(__dirname, ".."),
-  },
+
+  // Turbopack config (empty to silence warning - webpack still used for production builds)
+  turbopack: {},
+
   webpack: (config) => {
-    config.externals.push('pino-pretty', 'lokijs', 'encoding');
+    config.externals.push('pino-pretty', 'lokijs', 'encoding', 'thread-stream');
     return config;
   },
 };
