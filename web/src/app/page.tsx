@@ -13,7 +13,7 @@ export default function Home() {
       <Hero />
 
       {/* Features Section */}
-      <section id="features" className="py-20 md:py-28">
+      <section id="features" className="py-12 md:py-28">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
             <h2 className="heading-lg mb-4">Built for trust and transparency</h2>
@@ -175,17 +175,17 @@ export default function Home() {
               Fork the repository, customize the kernels, and deploy your own instance. Join the community building the future of verifiable credentials.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <a 
-                href="https://github.com/" 
-                target="_blank" 
+              <a
+                href="https://github.com/"
+                target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 rounded-lg bg-foreground text-background px-6 py-3.5 text-base font-medium hover:opacity-90 transition"
               >
                 <Github className="w-5 h-5" />
                 View on GitHub
               </a>
-              <a 
-                href="#" 
+              <a
+                href="#"
                 className="inline-flex items-center gap-2 rounded-lg border border-border bg-background px-6 py-3.5 text-base font-medium hover:bg-accent hover:text-accent-foreground transition"
               >
                 Read documentation

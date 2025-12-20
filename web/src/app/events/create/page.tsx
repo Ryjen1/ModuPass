@@ -265,7 +265,10 @@ export default function CreateEventPage() {
           address: CONTRACT_ADDRESS as `0x${string}`,
           abi: contractAbi as any,
           functionName: "createEvent",
-          args: [authData]
+          args: [authData],
+          // Critical fix for Fallback/Simulation mode:
+          gas: BigInt(500000),
+          account: address as `0x${string}`
         });
       }
 
@@ -481,10 +484,25 @@ export default function CreateEventPage() {
 
                   {embeddedWallet ? (
                     <div className="bg-background border rounded p-3 mt-2">
-                      <p className="text-xs font-mono mb-1">Embedded Wallet Address:</p>
+                      <div className="flex justify-between items-center mb-1">
+                        <p className="text-xs font-mono">Embedded Wallet Address:</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 text-xs"
+                          onClick={() => {
+                            if (embeddedWallet?.address) {
+                              navigator.clipboard.writeText(embeddedWallet.address);
+                              toast.success("Wallet address copied!");
+                            }
+                          }}
+                        >
+                          Copy
+                        </Button>
+                      </div>
                       <p className="font-mono font-bold text-xs break-all select-all flex items-center gap-2">
                         {embeddedWallet.address}
-                        {/* Copy button would go here */}
                       </p>
 
                       <div className="mt-2 text-xs flex items-center gap-2">

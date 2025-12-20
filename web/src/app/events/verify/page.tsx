@@ -102,7 +102,9 @@ function VerifyPageContent() {
                 address: CONTRACT_ADDRESS as `0x${string}`,
                 abi: ModuPassTargetBase as any,
                 functionName: "verifyAttendance",
-                args: [authData]
+                args: [authData],
+                // Explicitly set gas limit to avoid estimation errors on fallback
+                gas: BigInt(300000)
             });
 
             // Correction: The contract signature for `verifyAttendance` is:

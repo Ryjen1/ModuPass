@@ -167,7 +167,7 @@ export default function DashboardPage() {
     return (
         <div className="min-h-screen bg-background py-20">
             <div className="container mx-auto px-6 max-w-6xl">
-                <div className="flex items-center justify-between mb-8">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
                     <div>
                         <h1 className="heading-lg mb-3">Organizer Dashboard</h1>
                         <p className="body-md text-muted-foreground">
@@ -175,7 +175,7 @@ export default function DashboardPage() {
                         </p>
                     </div>
                     <Link href="/events/create">
-                        <Button>
+                        <Button className="w-full md:w-auto">
                             <Plus className="w-4 h-4 mr-2" />
                             Create Event
                         </Button>
@@ -219,7 +219,7 @@ export default function DashboardPage() {
                                     </Link>
                                 </div>
 
-                                <div className="grid grid-cols-3 gap-4 mb-4">
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
                                     <div className="bg-muted/30 rounded-lg p-4">
                                         <div className="flex items-center gap-2 mb-2">
                                             <Calendar className="w-4 h-4 text-primary" />

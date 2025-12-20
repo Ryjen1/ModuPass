@@ -104,17 +104,23 @@ body {
 }
 
 @utility heading-xl {
-  font-size: 3.5rem;
+  font-size: 2.5rem;
   line-height: 1.1;
   font-weight: 700;
   letter-spacing: -0.02em;
+  @media (min-width: 768px) {
+    font-size: 3.5rem;
+  }
 }
 
 @utility heading-lg {
-  font-size: 2.5rem;
+  font-size: 2rem;
   line-height: 1.2;
   font-weight: 700;
   letter-spacing: -0.01em;
+  @media (min-width: 768px) {
+    font-size: 2.5rem;
+  }
 }
 
 @utility heading-md {
