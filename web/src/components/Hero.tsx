@@ -10,7 +10,7 @@ export default function Hero() {
       <div className="absolute inset-0 gradient-radial pointer-events-none" />
       <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:24px_24px] pointer-events-none" />
 
-      <div className="container mx-auto px-6 pt-16 pb-24 md:pt-20 md:pb-32 relative">
+      <div className="container mx-auto px-6 pt-28 pb-24 md:pt-32 md:pb-32 relative">
         <div className="max-w-4xl mx-auto text-center">
           <div className="inline-flex items-center gap-2 rounded-full border border-emerald-500/20 bg-emerald-50 dark:bg-emerald-950/30 px-4 py-1.5 mb-6">
             <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />

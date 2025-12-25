@@ -31,7 +31,7 @@ interface CreatedEventData {
 function WalletBalance({ address }: { address: `0x${string}` }) {
   const { data, isError, isLoading } = useBalance({ address });
   if (isLoading) return <span>Loading...</span>;
-  if (isError) return <span>Error</span>;
+  if (isError) return <span className="text-red-500 text-[10px]" title="Network Error: Check RPC or Internet">Error (Net)</span>;
   return <span className={data?.value === BigInt(0) ? "text-red-500 font-bold" : "text-emerald-500 font-bold"}>
     {data ? formatEther(data.value).slice(0, 6) : "0"} {data?.symbol}
   </span>;

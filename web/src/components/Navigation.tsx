@@ -92,7 +92,7 @@ export default function Navigation() {
 
       {/* Mobile Menu Overlay */}
       {isMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-16 bg-background z-50 p-6 flex flex-col gap-6 animate-in slide-in-from-top-5">
+        <div className="md:hidden fixed inset-0 top-16 bg-white dark:bg-zinc-950 z-50 p-6 flex flex-col gap-6 animate-in slide-in-from-top-5 shadow-xl">
           <NavLinks className="text-lg py-2 border-b border-border/50" onClick={() => setIsMenuOpen(false)} />
 
           <div className="mt-4">

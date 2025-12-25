@@ -15,7 +15,7 @@ const queryClient = new QueryClient();
 const config = createConfig({
   chains: [sepolia],
   transports: {
-    [sepolia.id]: http(),
+    [sepolia.id]: http("https://rpc.ankr.com/eth_sepolia"),
   },
 });
 
