@@ -43,6 +43,10 @@ export default function CreateEventPage() {
   const { address: wagmiAddress } = useAccount();
   const { ready, authenticated, user, createWallet } = usePrivy();
   const { wallets } = useWallets();
+  const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+  const { data: embeddedBalance } = useBalance({
+    address: embeddedWallet?.address as `0x${string}`
+  });
   const { writeContractAsync } = useWriteContract();
 
   // KRNL Hook
@@ -68,7 +72,7 @@ export default function CreateEventPage() {
 
   // 3. Derived State (Wallet Logic)
   // Robust connection check: Prioritize embedded wallet for KRNL
-  const embeddedWallet = wallets.find(w => w.walletClientType === 'privy');
+  // embeddedWallet is already defined at line 46
   const activeWallet = embeddedWallet || wallets[0];
 
   const isConnected = mounted && ready && (authenticated && (!!activeWallet || !!user?.wallet?.address));
@@ -149,6 +153,14 @@ export default function CreateEventPage() {
       toast.error("Max attendees must be between 1 and 10,000");
       return;
     }
+
+    // Check for insufficient funds
+    if (embeddedBalance && embeddedBalance.value === BigInt(0)) {
+      toast.error("Insufficient funds! Please send Sepolia ETH to your Embedded Wallet.");
+      // Don't return, let them try if they think they have funds, but show error
+      // Actually, KRNL will definitely fail. Let's block it or warn heavily.
+    }
+
 
     setIsProcessing(true);
     setAuthorizationError(null); // Clear previous errors
