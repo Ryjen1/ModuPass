@@ -17,6 +17,9 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "ModuPass",
   description: "Modular event passes on-chain",
+  icons: {
+    icon: "/logo.png",
+  },
 };
 
 export default function RootLayout({

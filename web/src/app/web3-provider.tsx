@@ -39,7 +39,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
         appearance: {
           theme: 'dark',
           accentColor: '#10b981',
-          logo: 'https://modupass.app/logo.png',
+          logo: 'https://modu-pass.vercel.app/logo.png',
         },
         supportedChains: [sepolia],
         defaultChain: sepolia,
