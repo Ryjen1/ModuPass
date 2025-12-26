@@ -1,24 +1,24 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #0a0a0a;
-  --card: #ffffff;
-  --card-foreground: #0a0a0a;
-  --popover: #ffffff;
-  --popover-foreground: #0a0a0a;
+  --background: #09090b;
+  --foreground: #fafafa;
+  --card: #09090b;
+  --card-foreground: #fafafa;
+  --popover: #09090b;
+  --popover-foreground: #fafafa;
   --primary: #10b981;
   --primary-foreground: #ffffff;
-  --secondary: #f4f4f5;
-  --secondary-foreground: #0a0a0a;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --accent: #f4f4f5;
-  --accent-foreground: #0a0a0a;
+  --secondary: #27272a;
+  --secondary-foreground: #fafafa;
+  --muted: #27272a;
+  --muted-foreground: #a1a1aa;
+  --accent: #27272a;
+  --accent-foreground: #fafafa;
   --destructive: #ef4444;
-  --destructive-foreground: #ffffff;
-  --border: #e4e4e7;
-  --input: #e4e4e7;
+  --destructive-foreground: #fafafa;
+  --border: #27272a;
+  --input: #27272a;
   --ring: #10b981;
   --radius: 0.5rem;
   --emerald-50: #ecfdf5;
@@ -73,30 +73,6 @@
   --radius-xl: 1rem;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #09090b;
-    --foreground: #fafafa;
-    --card: #09090b;
-    --card-foreground: #fafafa;
-    --popover: #09090b;
-    --popover-foreground: #fafafa;
-    --primary: #10b981;
-    --primary-foreground: #ffffff;
-    --secondary: #27272a;
-    --secondary-foreground: #fafafa;
-    --muted: #27272a;
-    --muted-foreground: #a1a1aa;
-    --accent: #27272a;
-    --accent-foreground: #fafafa;
-    --destructive: #ef4444;
-    --destructive-foreground: #fafafa;
-    --border: #27272a;
-    --input: #27272a;
-    --ring: #10b981;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
@@ -108,6 +84,7 @@ body {
   line-height: 1.1;
   font-weight: 700;
   letter-spacing: -0.02em;
+
   @media (min-width: 768px) {
     font-size: 3.5rem;
   }
@@ -118,6 +95,7 @@ body {
   line-height: 1.2;
   font-weight: 700;
   letter-spacing: -0.01em;
+
   @media (min-width: 768px) {
     font-size: 2.5rem;
   }
