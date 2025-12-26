@@ -1,123 +1,61 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useAccount } from "wagmi";
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Calendar, Users, CheckCircle, Download, Loader2, Plus } from "lucide-react";
+import { Calendar, Users, CheckCircle, Download, Loader2, Plus, Ticket, LayoutDashboard } from "lucide-react";
 import { toast } from "sonner";
-import { ethers } from "ethers";
-
-// ... imports
-
-// Removed Supabase import
-// import { supabase } from "@/lib/supabase";
-
-const CONTRACT_ABI = [
-    "function getTotalEvents() external view returns (uint256)",
-    "function getEventIdByIndex(uint256 index) external view returns (string)",
-    "function getEvent(string eventId) external view returns (string, string, address, uint256, bool)",
-    "function getEventAttendees(string eventId) external view returns (address[])"
-];
-
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
-const RPC_URL = process.env.NEXT_PUBLIC_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com";
-
-// ... component starts
-
+import { useEvents } from "@/hooks/useEvents";
 import { getEventCodes } from "@/lib/services/code-generator";
 
-interface EventWithStats {
-    id: string;
-    name: string;
-    description: string;
-    max_attendees: number;
-    created_at: string;
-    registrations: number;
-    verifications: number;
+// Simple Tabs Component (Inline for simplicity or could be imported from shadcn if available)
+function Tabs({ activeTab, setActiveTab }: { activeTab: string, setActiveTab: (t: string) => void }) {
+    return (
+        <div className="flex border-b border-border/40 mb-8">
+            <button
+                onClick={() => setActiveTab("creator")}
+                className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab === "creator"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+            >
+                <LayoutDashboard className="w-4 h-4" />
+                Creator Hub
+            </button>
+            <button
+                onClick={() => setActiveTab("tickets")}
+                className={`flex items-center gap-2 px-6 py-3 text-sm font-medium transition-colors border-b-2 ${activeTab === "tickets"
+                        ? "border-primary text-primary"
+                        : "border-transparent text-muted-foreground hover:text-foreground"
+                    }`}
+            >
+                <Ticket className="w-4 h-4" />
+                My Tickets
+            </button>
+        </div>
+    );
 }
 
 export default function DashboardPage() {
     const { address, isConnected } = useAccount();
-    const [events, setEvents] = useState<EventWithStats[]>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const { events, isLoading, refetch } = useEvents();
+    const [activeTab, setActiveTab] = useState("creator");
 
-    useEffect(() => {
-        if (isConnected && address) {
-            loadOrganizerEvents();
-        } else if (!isConnected) {
-            setIsLoading(false);
-        }
-    }, [isConnected, address]);
+    // Filter events based on active tab and user address
+    const creatorEvents = events.filter(e =>
+        address && e.organizer && e.organizer.toLowerCase() === address.toLowerCase()
+    );
 
-    const loadOrganizerEvents = async () => {
-        if (!address || !CONTRACT_ADDRESS) {
-            setIsLoading(false);
-            return;
-        }
-
-        try {
-            const provider = new ethers.JsonRpcProvider(RPC_URL);
-            const contract = new ethers.Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-
-            // 1. Get total events
-            let totalEvents = 0;
-            try {
-                const totalEventsBigInt = await contract.getTotalEvents();
-                totalEvents = Number(totalEventsBigInt);
-            } catch (e) {
-                console.warn("Error fetching total events", e);
-            }
-
-            if (totalEvents === 0) {
-                setEvents([]);
-                return;
-            }
-
-            const organizerEvents: EventWithStats[] = [];
-
-            // Loop through all events (backwards)
-            // Warning: scaling issue if events > 100s, but fine for demo
-            const startIndex = Math.max(0, totalEvents - 50); // limit to 50
-            for (let i = totalEvents - 1; i >= startIndex; i--) {
-                try {
-                    const eventId = await contract.getEventIdByIndex(i);
-                    const details = await contract.getEvent(eventId) as any;
-                    const organizer = details[2];
-
-                    // FILTER: Only show events owned by current user
-                    if (organizer.toLowerCase() === address.toLowerCase()) {
-                        const attendees = await contract.getEventAttendees(eventId);
-
-                        organizerEvents.push({
-                            id: details[0],
-                            name: details[1],
-                            description: "Event description not stored on-chain", // Not on chain in V1
-                            max_attendees: 100, // Default constant as it's not in the View
-                            created_at: new Date(Number(details[3]) * 1000).toISOString(),
-                            registrations: attendees.length, // Registrations = Attendees (Verified)
-                            verifications: attendees.length // Verified
-                        });
-                    }
-                } catch (e) {
-                    console.warn(`Error fetching event at index ${i}`, e);
-                }
-            }
-
-            setEvents(organizerEvents);
-        } catch (error: any) {
-            console.error("Error loading events:", error);
-            toast.error("Failed to load events from blockchain");
-        } finally {
-            setIsLoading(false);
-        }
-    };
+    const myTickets = events.filter(e =>
+        address && e.attendees && e.attendees.some(a => a.toLowerCase() === address.toLowerCase())
+    );
 
     const downloadCodes = async (eventId: string, eventName: string) => {
         try {
             toast.info("Downloading codes...");
-            const codes = await getEventCodes(eventId); // Now imported
+            const codes = await getEventCodes(eventId);
 
             if (!codes || codes.length === 0) {
                 toast.error("No codes found for this event");
@@ -144,11 +82,11 @@ export default function DashboardPage() {
         return (
             <div className="min-h-screen bg-background py-20">
                 <div className="container mx-auto px-6 max-w-4xl">
-                    <Card className="p-12 text-center">
-                        <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                    <Card className="p-12 text-center border-border/50">
+                        <Users className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
                         <h3 className="heading-md mb-2">Connect Your Wallet</h3>
                         <p className="text-muted-foreground mb-6">
-                            Please connect your wallet to view your organizer dashboard
+                            Please connect your wallet to access your dashboard and tickets.
                         </p>
                     </Card>
                 </div>
@@ -167,117 +105,152 @@ export default function DashboardPage() {
     return (
         <div className="min-h-screen bg-background py-20">
             <div className="container mx-auto px-6 max-w-6xl">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-                    <div>
-                        <h1 className="heading-lg mb-3">Organizer Dashboard</h1>
-                        <p className="body-md text-muted-foreground">
-                            Manage your events and track attendance
-                        </p>
-                    </div>
-                    <Link href="/events/create">
-                        <Button className="w-full md:w-auto">
-                            <Plus className="w-4 h-4 mr-2" />
-                            Create Event
-                        </Button>
-                    </Link>
+                <div className="mb-8">
+                    <h1 className="heading-lg mb-2">Dashboard</h1>
+                    <p className="text-muted-foreground">
+                        Welcome back! Manage your events and view your attendance proofs.
+                    </p>
                 </div>
 
-                {events.length === 0 ? (
-                    <Card className="p-12 text-center">
-                        <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
-                        <h3 className="heading-md mb-2">No Events Yet</h3>
-                        <p className="text-muted-foreground mb-6">
-                            Create your first event to start tracking attendance
-                        </p>
-                        <Link href="/events/create">
-                            <Button>
-                                <Plus className="w-4 h-4 mr-2" />
-                                Create Your First Event
-                            </Button>
-                        </Link>
-                    </Card>
-                ) : (
-                    <div className="space-y-6">
-                        {events.map((event) => (
-                            <Card key={event.id} className="p-6">
-                                <div className="flex items-start justify-between mb-4">
-                                    <div className="flex-1">
-                                        <h3 className="heading-sm mb-2">{event.name}</h3>
-                                        {event.description && (
-                                            <p className="text-sm text-muted-foreground mb-3">
-                                                {event.description}
-                                            </p>
-                                        )}
-                                        <p className="text-xs text-muted-foreground">
-                                            Created {new Date(event.created_at).toLocaleDateString()}
-                                        </p>
-                                    </div>
-                                    <Link href={`/events/${event.id}`}>
-                                        <Button variant="outline" size="sm">
-                                            View Event
-                                        </Button>
-                                    </Link>
-                                </div>
+                <Tabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
-                                    <div className="bg-muted/30 rounded-lg p-4">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Calendar className="w-4 h-4 text-primary" />
-                                            <span className="text-sm font-medium">Capacity</span>
-                                        </div>
-                                        <p className="text-2xl font-bold">{event.max_attendees}</p>
-                                        <p className="text-xs text-muted-foreground">Max attendees</p>
-                                    </div>
+                {activeTab === "creator" && (
+                    <div className="space-y-6 animate-in fade-in duration-500">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="heading-sm">Your Events</h2>
+                            <Link href="/events/create">
+                                <Button>
+                                    <Plus className="w-4 h-4 mr-2" />
+                                    New Event
+                                </Button>
+                            </Link>
+                        </div>
 
-                                    <div className="bg-muted/30 rounded-lg p-4">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <Users className="w-4 h-4 text-blue-600" />
-                                            <span className="text-sm font-medium">Registered</span>
-                                        </div>
-                                        <p className="text-2xl font-bold">{event.registrations}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {Math.round((event.registrations / event.max_attendees) * 100)}% of capacity
-                                        </p>
-                                    </div>
-
-                                    <div className="bg-muted/30 rounded-lg p-4">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <CheckCircle className="w-4 h-4 text-emerald-600" />
-                                            <span className="text-sm font-medium">Verified</span>
-                                        </div>
-                                        <p className="text-2xl font-bold">{event.verifications}</p>
-                                        <p className="text-xs text-muted-foreground">
-                                            {event.registrations > 0
-                                                ? Math.round((event.verifications / event.registrations) * 100)
-                                                : 0}% attendance rate
-                                        </p>
-                                    </div>
-                                </div>
-
-                                <div className="flex gap-3">
-                                    <Button
-                                        variant="outline"
-                                        size="sm"
-                                        onClick={() => downloadCodes(event.id, event.name)}
-                                        className="flex-1"
-                                    >
-                                        <Download className="w-4 h-4 mr-2" />
-                                        Download Codes
+                        {creatorEvents.length === 0 ? (
+                            <Card className="p-12 text-center border-border/50 bg-muted/10">
+                                <Calendar className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                                <h3 className="heading-md mb-2">No Events Created</h3>
+                                <p className="text-muted-foreground mb-6">
+                                    You haven't created any events yet.
+                                </p>
+                                <Link href="/events/create">
+                                    <Button variant="outline">
+                                        Create First Event
                                     </Button>
-                                    <Link href={`/events/${event.id}`} className="flex-1">
-                                        <Button variant="secondary" size="sm" className="w-full">
-                                            View Details
-                                        </Button>
-                                    </Link>
-                                </div>
+                                </Link>
                             </Card>
-                        ))}
+                        ) : (
+                            <div className="space-y-6">
+                                {creatorEvents.map((event) => (
+                                    <Card key={event.id} className="p-6 border-border/50 hover:border-primary/50 transition-colors">
+                                        <div className="flex flex-col md:flex-row justify-between gap-4 mb-6">
+                                            <div>
+                                                <h3 className="heading-sm mb-1 text-primary">{event.name}</h3>
+                                                <p className="text-xs text-muted-foreground font-mono">ID: {event.id}</p>
+                                                <p className="text-sm text-muted-foreground mt-2">
+                                                    Created {new Date(event.createdAt * 1000).toLocaleDateString()}
+                                                </p>
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <Button
+                                                    variant="outline"
+                                                    size="sm"
+                                                    onClick={() => downloadCodes(event.id, event.name)}
+                                                >
+                                                    <Download className="w-4 h-4 mr-2" />
+                                                    Codes
+                                                </Button>
+                                                <Link href={`/events/${event.id}`}>
+                                                    <Button size="sm">Manage</Button>
+                                                </Link>
+                                            </div>
+                                        </div>
+
+                                        <div className="grid grid-cols-3 gap-4">
+                                            <div className="bg-muted/30 p-4 rounded-lg text-center">
+                                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Capacity</p>
+                                                <p className="text-2xl font-bold">{event.maxAttendees}</p>
+                                            </div>
+                                            <div className="bg-muted/30 p-4 rounded-lg text-center">
+                                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Verified</p>
+                                                <p className="text-2xl font-bold text-emerald-500">{event.attendeeCount}</p>
+                                            </div>
+                                            <div className="bg-muted/30 p-4 rounded-lg text-center">
+                                                <p className="text-xs text-muted-foreground uppercase tracking-wider mb-1">Status</p>
+                                                <p className="text-lg font-bold">
+                                                    {event.isActive ? <span className="text-emerald-500">Active</span> : <span className="text-muted-foreground">Ended</span>}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
                     </div>
                 )}
 
-                <div className="mt-8 text-center text-sm text-muted-foreground">
-                    <p>Connected as: {address?.slice(0, 6)}...{address?.slice(-4)}</p>
-                </div>
+                {activeTab === "tickets" && (
+                    <div className="space-y-6 animate-in fade-in duration-500">
+                        <div className="flex justify-between items-center mb-6">
+                            <h2 className="heading-sm">Your Verified Tickets</h2>
+                            <Link href="/events">
+                                <Button variant="outline">
+                                    Explore Events
+                                </Button>
+                            </Link>
+                        </div>
+
+                        {myTickets.length === 0 ? (
+                            <Card className="p-12 text-center border-border/50 bg-muted/10">
+                                <Ticket className="w-16 h-16 text-muted-foreground mx-auto mb-4" />
+                                <h3 className="heading-md mb-2">No Verified Tickets</h3>
+                                <p className="text-muted-foreground mb-6">
+                                    You haven't verified attendance for any events yet.
+                                </p>
+                                <Link href="/events">
+                                    <Button>
+                                        Browse Events
+                                    </Button>
+                                </Link>
+                            </Card>
+                        ) : (
+                            <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
+                                {myTickets.map((event) => (
+                                    <Card key={event.id} className="p-0 overflow-hidden border-border/50 group hover:border-emerald-500/50 transition-all">
+                                        <div className="h-2 bg-emerald-500 w-full" />
+                                        <div className="p-6">
+                                            <div className="flex justify-between items-start mb-4">
+                                                <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center">
+                                                    <CheckCircle className="w-5 h-5 text-emerald-500" />
+                                                </div>
+                                                <span className="px-2 py-1 rounded bg-muted text-[10px] font-mono uppercase text-muted-foreground">
+                                                    Verified
+                                                </span>
+                                            </div>
+
+                                            <h3 className="heading-sm mb-2 group-hover:text-emerald-400 transition-colors">{event.name}</h3>
+                                            <p className="text-sm text-muted-foreground mb-4">
+                                                {new Date(event.createdAt * 1000).toLocaleDateString(undefined, {
+                                                    weekday: 'long',
+                                                    year: 'numeric',
+                                                    month: 'long',
+                                                    day: 'numeric'
+                                                })}
+                                            </p>
+
+                                            <div className="pt-4 border-t border-border/50 flex justify-between items-center">
+                                                <span className="text-xs text-muted-foreground">Organizer: {event.organizer.slice(0, 6)}...</span>
+                                                <Link href={`/events/${event.id}`}>
+                                                    <Button size="sm" variant="ghost" className="h-8">Details</Button>
+                                                </Link>
+                                            </div>
+                                        </div>
+                                    </Card>
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
             </div>
         </div>
     );
