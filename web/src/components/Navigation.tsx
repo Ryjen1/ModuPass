@@ -32,7 +32,7 @@ export default function Navigation() {
   );
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b border-border/50 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+    <header className="sticky top-0 z-40 w-full border-b border-border/50 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/95">
       <div className="container mx-auto px-6">
         <div className="flex h-16 items-center justify-between">
           <Link href="/" className="flex items-center space-x-2">
@@ -92,7 +92,7 @@ export default function Navigation() {
 
       {/* Mobile Menu Overlay */}
       {isMenuOpen && (
-        <div className="md:hidden fixed inset-0 top-16 bg-white dark:bg-zinc-950 z-50 p-6 flex flex-col gap-6 animate-in slide-in-from-top-5 shadow-xl">
+        <div className="md:hidden fixed inset-0 top-16 bg-background z-50 p-6 flex flex-col gap-6 animate-in slide-in-from-top-5 shadow-xl border-t border-border/50 h-[calc(100vh-4rem)]">
           <NavLinks className="text-lg py-2 border-b border-border/50" onClick={() => setIsMenuOpen(false)} />
 
           <div className="mt-4">
