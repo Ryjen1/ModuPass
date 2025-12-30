@@ -2,20 +2,15 @@ import { ethers } from "hardhat";
 import * as fs from "fs";
 
 async function main() {
-    console.log("🚀 Deploying ModuPassTargetBase (KRNL Integrated)...");
+    console.log("🚀 Deploying ModuPassTargetBase (Self-Hosted KRNL Mode)...");
 
     const [deployer] = await ethers.getSigners();
-    console.log("Deployer address:", deployer.address);
+    console.log("Deployer address (Acting as KRNL Node):", deployer.address);
 
-    // KRNL Node Master Key (Signer Address)
-    // This public key allows the contract to verify signatures from the KRNL Node.
-    // KRNL Node Master Key (Signer Address) regarding official docs
-    const MASTER_KEY = "0x493f395c80C178Ae32Ef3b88325739E80073118A";
-
-    // Recovery Key (Fallback for emergency updates)
+    // Self-Hosted Mode: The Deployer IS the Master Key
+    // This allows us to sign payloads locally without needing the external KRNL Node for the demo.
+    const MASTER_KEY = deployer.address;
     const RECOVERY_KEY = deployer.address;
-
-    // Delegated Account Code Hash (Default for now)
     const DELEGATED_ACCOUNT_CODE_HASH = "0x4dec9b9b6abd56c7cbcdf96b77c09ec75af5dacd505fa137acc16873f2a184d6";
 
     console.log("Configuration:");
@@ -34,11 +29,10 @@ async function main() {
 
     const address = await contract.getAddress();
 
-    console.log("✅ ModuPassTargetBase deployed to:", address);
-    console.log("-> SAVE THIS ADDRESS for the registration step!");
+    console.log("✅ ModuPassTargetBase (Self-Hosted) deployed to:", address);
+    console.log("-> Update NEXT_PUBLIC_CONTRACT_ADDRESS in web/.env.local with this!");
 
-    // Helper: Write to file for next script
-    fs.writeFileSync('deployed_modupass_address.txt', address);
+    fs.writeFileSync('deployed_modupass_address_self_hosted.txt', address);
 }
 
 main()

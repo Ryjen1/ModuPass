@@ -5,7 +5,7 @@ import { useAccount } from "wagmi";
 const CONTRACT_ABI = [
     "function getTotalEvents() external view returns (uint256)",
     "function getEventIdByIndex(uint256 index) external view returns (string)",
-    "function getEvent(string eventId) external view returns (string, string, address, uint256, bool)",
+    "function getEvent(string eventId) external view returns (string, string, address, bytes32, uint256, uint256, bool)",
     "function getEventAttendees(string eventId) external view returns (address[])"
 ];
 
@@ -20,7 +20,7 @@ export interface EventData {
     isActive: boolean;
     attendeeCount: number;
     attendees: string[]; // List of wallet addresses
-    maxAttendees: number; // Inferred or default
+    maxAttendees: number;
 }
 
 export function useEvents() {
@@ -78,13 +78,23 @@ export function useEvents() {
                         console.warn(`Failed to fetch attendees for ${eventId}`);
                     }
 
+                    // Struct mapping:
+                    // 0: eventId (string)
+                    // 1: eventName (string)
+                    // 2: organizer (address)
+                    // 3: codesMerkleRoot (bytes32)
+                    // 4: maxAttendees (uint256)
+                    // 5: createdAt (uint256)
+                    // 6: isActive (bool)
+
                     loadedEvents.push({
                         id: details[0],
                         name: details[1],
                         organizer: details[2],
-                        createdAt: Number(details[3]),
-                        isActive: details[4],
-                        maxAttendees: 100, // Hardcoded as it's not in the view function of this contract version
+                        // details[3] is root, skipped for list view
+                        maxAttendees: Number(details[4]),
+                        createdAt: Number(details[5]),
+                        isActive: details[6],
                         attendeeCount: attendees.length,
                         attendees: attendees
                     });

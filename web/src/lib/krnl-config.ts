@@ -6,9 +6,9 @@ const delegatedAddress = process.env.NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS || "0
 const privyAppId = process.env.NEXT_PUBLIC_PRIVY_APP_ID || "cmikgobrw03dzkw0bj7jkhy8a";
 
 // Export constants for UI validation (Moved OUTSIDE the object)
-export const KRNL_DAPP_ID = 9860;
+export const KRNL_DAPP_ID = 9866;
 export const KRNL_ENTRY_KEY = "0x9e4e02c291a264ba692219ed55bbc98d195c9fd40836ba2786a1ef3f6373212a";
-export const KRNL_ACCESS_TOKEN = "0x4401f104994510bf927e43f0ec95220e0ba711844085c2378ea8450bd0f42713026e0992ca06f72837b3badd057802a2e95c2a8e694abac01d2c4919bd63a6fa1b";
+export const KRNL_ACCESS_TOKEN = "0x5a4a43888123b56f648e3ab978378e573bc02ed40bb27d3b7db54c043f02deb837ab27d4b0f4f207824178ee31702fcecfd4cbcf8027cfa759c4fd9841c6ea4e1b";
 
 export const krnlConfig = createConfig({
   chain: sepolia,

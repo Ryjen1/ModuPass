@@ -37,7 +37,7 @@ export function createEventWorkflowTemplate(
     contractAddress: string
 ): KRNLWorkflowTemplate {
     return {
-        kernelIds: [337],
+        kernelIds: [337], // Reverting to documented Kernel ID
         dappId: KRNL_DAPP_ID, // Inject manually to ensure it's there
         accessToken: KRNL_ACCESS_TOKEN, // Inject manually to ensure it's there
         chain_id: 11155111, // Sepolia
@@ -49,7 +49,7 @@ export function createEventWorkflowTemplate(
                 // AuthData struct will be constructed by KRNL
                 eventId,
                 eventName,
-                codesMerkleRoot: merkleRoot,
+                codesMerkleRoot: merkleRoot, // Matches Solidity variable 'codesMerkleRoot'
                 maxAttendees
             }
         ],
@@ -77,6 +77,9 @@ export function verifyAttendanceWorkflowTemplate(
     contractAddress: string
 ): KRNLWorkflowTemplate {
     return {
+        kernelIds: [337],
+        dappId: KRNL_DAPP_ID,
+        accessToken: KRNL_ACCESS_TOKEN,
         chain_id: 11155111, // Sepolia
         sender: senderAddress,
         contract: contractAddress,
