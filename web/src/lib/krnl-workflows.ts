@@ -1,150 +1,101 @@
-import { KRNL_DAPP_ID, KRNL_ACCESS_TOKEN } from "./krnl-config";
-import { ethers, AbiCoder } from "ethers";
-
 /**
- * KRNL Workflow DSL Template for Event Creation
- * This template defines the workflow for creating events with KRNL authorization
+ * KRNL Workflow Templates for ModuPass
+ * 
+ * This module defines workflow templates using KRNL's Domain-Specific Language (DSL)
+ * for event creation and attendance verification operations.
+ * 
+ * IMPORTANT: Workflows must be pre-created in KRNL Studio (https://studio.krnl.xyz)
+ * before use. The workflow IDs should be stored in environment variables.
  */
 
-export interface KRNLWorkflowTemplate {
-    kernelIds?: number[];
-    dappId?: number;
-    accessToken?: string;
-    chain_id: number;
-    sender: string;
-    contract: string;
-    function: string;
-    parameters: any[];
-    sponsor_execution_fee: boolean;
-    value: string;
-    rpc_url: string;
-    gas_limit: string;
-    // ...
+import type { WorkflowObject } from '@krnl-dev/sdk-react-7702';
+
+/**
+ * Create event workflow parameters
+ * These will be injected into the KRNL Studio workflow template
+ */
+export interface CreateEventParams {
+  eventId: string;
+  eventName: string;
+  merkleRoot: string;
+  maxAttendees: number;
+  contractAddress: string;
 }
 
 /**
- * Create a KRNL workflow template for event creation
- * @param eventId - Unique event identifier
- * @param eventName - Name of the event
-// ... (keeping comments)
+ * Verify attendance workflow parameters
  */
-export function createEventWorkflowTemplate(
-    eventId: string,
-    eventName: string,
-    merkleRoot: string,
-    maxAttendees: number,
-    senderAddress: string,
-    contractAddress: string
-): KRNLWorkflowTemplate {
-    return {
-        kernelIds: [337], // Reverting to documented Kernel ID
-        dappId: KRNL_DAPP_ID, // Inject manually to ensure it's there
-        accessToken: KRNL_ACCESS_TOKEN, // Inject manually to ensure it's there
-        chain_id: 11155111, // Sepolia
-        sender: senderAddress,
-        contract: contractAddress,
-        function: "createEvent",
-        parameters: [
-            {
-                // AuthData struct will be constructed by KRNL
-                eventId,
-                eventName,
-                codesMerkleRoot: merkleRoot, // Matches Solidity variable 'codesMerkleRoot'
-                maxAttendees
-            }
-        ],
-        sponsor_execution_fee: false,
-        value: "0",
-        rpc_url: process.env.NEXT_PUBLIC_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
-        gas_limit: "500000"
-    };
+export interface VerifyAttendanceParams {
+  eventId: string;
+  attendeeAddress: string;
+  code: string;
+  contractAddress: string;
 }
 
 /**
- * Create a KRNL workflow template for attendance verification
- * @param eventId - Event identifier
- * @param attendeeAddress - Address of the attendee
- * @param code - Verification code
- * @param senderAddress - Address initiating the verification
- * @param contractAddress - ModuPassTargetBase contract address
- * @returns KRNL workflow DSL template
+ * Create a parameter object for event creation workflow
+ * 
+ * This generates the parameters that will be injected into the 
+ * KRNL Studio workflow template created for event creation.
+ * 
+ * @param params - Event creation parameters
+ * @returns Parameters object for KRNL workflow template
  */
-export function verifyAttendanceWorkflowTemplate(
-    eventId: string,
-    attendeeAddress: string,
-    code: string,
-    senderAddress: string,
-    contractAddress: string
-): KRNLWorkflowTemplate {
-    return {
-        kernelIds: [337],
-        dappId: KRNL_DAPP_ID,
-        accessToken: KRNL_ACCESS_TOKEN,
-        chain_id: 11155111, // Sepolia
-        sender: senderAddress,
-        contract: contractAddress,
-        function: "verifyAttendance",
-        parameters: [
-            {
-                eventId,
-                attendee: attendeeAddress,
-                code,
-                timestamp: Math.floor(Date.now() / 1000),
-                isValid: true // Will be validated by KRNL workflow
-            }
-        ],
-        sponsor_execution_fee: false,
-        value: "0",
-        rpc_url: process.env.NEXT_PUBLIC_RPC_URL || "https://ethereum-sepolia-rpc.publicnode.com",
-        gas_limit: "300000"
-    };
+export function createEventWorkflowParams(
+  params: CreateEventParams
+): Record<string, string | number> {
+  return {
+    "{{CONTRACT_ADDRESS}}": params.contractAddress,
+    "{{EVENT_ID}}": params.eventId,
+    "{{EVENT_NAME}}": params.eventName,
+    "{{MERKLE_ROOT}}": params.merkleRoot,
+    "{{MAX_ATTENDEES}}": params.maxAttendees
+  };
 }
 
 /**
- * Generate Mock AuthData for Simulation Mode
- * This bypasses KRNL signature/proof generation but constructs a valid AuthData structure
- * that the ModuPassDemo contract (permissive) will accept.
+ * Create a parameter object for attendance verification workflow
+ * 
+ * @param params - Verification parameters
+ * @returns Parameters object for KRNL workflow template
  */
+export function verifyAttendanceWorkflowParams(
+  params: VerifyAttendanceParams
+): Record<string, string> {
+  return {
+    "{{CONTRACT_ADDRESS}}": params.contractAddress,
+    "{{EVENT_ID}}": params.eventId,
+    "{{ATTENDEE_ADDRESS}}": params.attendeeAddress,
+    "{{CODE}}": params.code,
+    "{{TIMESTAMP}}": Math.floor(Date.now() / 1000).toString()
+  };
+}
 
+/**
+ * Get workflow IDs from environment
+ * These IDs are obtained from KRNL Studio after creating workflows
+ */
+export const KRNL_WORKFLOW_IDS = {
+  createEvent: process.env.NEXT_PUBLIC_KRNL_CREATE_EVENT_WORKFLOW_ID,
+  verifyAttendance: process.env.NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID
+};
 
-export async function getMockAuthData(
-    functionName: "createEvent" | "verifyAttendance",
-    params: any
-): Promise<any> {
-    const abiCoder = new AbiCoder();
-    let resultBytes = "0x";
-
-    if (functionName === "createEvent") {
-        // Encode parameters for createEvent: (string, string, string, uint256)
-        resultBytes = abiCoder.encode(
-            ["string", "string", "string", "uint256"],
-            [
-                params.eventId,
-                params.eventName,
-                params.merkleRoot,
-                params.maxAttendees
-            ]
-        );
-    } else if (functionName === "verifyAttendance") {
-        // Encode parameters for verifyAttendance: (string, address, string)
-        resultBytes = abiCoder.encode(
-            ["string", "address", "string"],
-            [
-                params.eventId,
-                params.attendee,
-                params.code
-            ]
-        );
-    }
-
-    // Return AuthData struct matching ModuPassTargetBase ABI
-    return {
-        nonce: BigInt(Math.floor(Date.now() / 1000)),
-        expiry: BigInt(Math.floor(Date.now() / 1000) + 3600), // 1 hour valid
-        id: ethers.id("mock-workflow"), // Maps to 'id' in ABI
-        executions: [], // bytes32[]
-        result: resultBytes,
-        sponsorExecutionFee: false,
-        signature: "0x"
-    };
+/**
+ * Validate that required workflow IDs are configured
+ */
+export function validateWorkflowConfig(): { valid: boolean; missing: string[] } {
+  const missing: string[] = [];
+  
+  if (!KRNL_WORKFLOW_IDS.createEvent) {
+    missing.push('NEXT_PUBLIC_KRNL_CREATE_EVENT_WORKFLOW_ID');
+  }
+  
+  if (!KRNL_WORKFLOW_IDS.verifyAttendance) {
+    missing.push('NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID');
+  }
+  
+  return {
+    valid: missing.length === 0,
+    missing
+  };
 }

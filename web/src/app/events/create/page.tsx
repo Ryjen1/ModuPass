@@ -2,10 +2,12 @@
 
 import { useState, useEffect } from "react";
 // Removed createPortal to avoid Runtime Errors with Next.js App Router
-import { useAccount, useWriteContract, useBalance, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount, useWriteContract, useBalance, useConfig, useWaitForTransactionReceipt } from "wagmi";
+import { waitForTransactionReceipt } from "wagmi/actions";
 import { formatEther } from "viem";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useKRNL } from '@krnl-dev/sdk-react-7702';
+import { useKRNL, WorkflowStatusCode } from '@krnl-dev/sdk-react-7702';
+import type { WorkflowObject } from '@krnl-dev/sdk-react-7702';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,10 +18,12 @@ import { toast } from "sonner";
 import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
 import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
-import { createEventWorkflowTemplate } from "@/lib/krnl-workflows";
-import { krnlConfig, KRNL_DAPP_ID, KRNL_ENTRY_KEY, KRNL_ACCESS_TOKEN } from "@/lib/krnl-config";
-
-const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
+import { 
+  createEventWorkflowParams, 
+  KRNL_WORKFLOW_IDS,
+  validateWorkflowConfig 
+} from "@/lib/krnl-workflows";
+import { CONTRACT_ADDRESS } from "@/lib/krnl-config";
 
 interface CreatedEventData {
   eventId: string;
@@ -41,6 +45,7 @@ function WalletBalance({ address }: { address: `0x${string}` }) {
 export default function CreateEventPage() {
   // 1. All Hooks First
   const [mounted, setMounted] = useState(false);
+  const config = useConfig();
   const { address: wagmiAddress } = useAccount();
   const { ready, authenticated, user, createWallet } = usePrivy();
   const { wallets } = useWallets();
@@ -54,14 +59,17 @@ export default function CreateEventPage() {
     hash: txHash,
   });
 
-  // KRNL Hook
-  // @ts-ignore - KRNL types might be loose
-  const krnlHook = useKRNL();
-  const { executeWorkflow, isAuthorized, enableSmartAccount } = krnlHook || {};
-
-  // Debug logging helpers
-  const hookError = (krnlHook as any)?.error;
-  const hookStatus = (krnlHook as any)?.statusCode;
+  // KRNL Hook - Properly typed with correct types from SDK
+  const { 
+    executeWorkflowFromTemplate,
+    isAuthorized, 
+    enableSmartAccount,
+    error: krnlError,
+    statusCode,
+    steps,
+    currentStep,
+    resetSteps
+  } = useKRNL();
 
   // 2. All State Declarations Second
   const [eventId, setEventId] = useState("");
@@ -89,9 +97,15 @@ export default function CreateEventPage() {
   // Debug logging
   useEffect(() => {
     if (!mounted) return;
-    console.log("🚀 KRNL DEBUG - V2.1 (String Token) 🚀");
-    // ... debug logging kept minimal for brevity
-  }, [mounted, ready, authenticated, embeddedWallet, activeWallet, isAuthorized, isConnected, address, krnlHook]);
+    console.log("🔧 ModuPass KRNL Integration Status:", {
+      isAuthorized,
+      isConnected,
+      address,
+      embeddedWallet: embeddedWallet?.address,
+      statusCode,
+      currentStep
+    });
+  }, [mounted, isAuthorized, isConnected, address, embeddedWallet, statusCode, currentStep]);
 
   // Monitor transaction status
   useEffect(() => {
@@ -304,103 +318,113 @@ export default function CreateEventPage() {
     };
 
     try {
-      // Step 0: Check if event exists (Skipped for brevity/robustness in demo)
-
-      // Step 1: KRNL Auth
-      // BYPASS MODE: Skip authorization and workflow for testing UI
-      const BYPASS_MODE = false;
-
-      if (!BYPASS_MODE && isAuthorized === false) {
-        toast.info("Authorizing KRNL delegated account...");
-        if (!enableSmartAccount) throw new Error("KRNL SDK issue");
-        const authResult = await enableSmartAccount();
-        if (!authResult) throw new Error("Authorization failed");
-        toast.success("KRNL account authorized!");
-        await new Promise(resolve => setTimeout(resolve, 1000));
+      // Step 0: Validate KRNL configuration
+      const configValidation = validateWorkflowConfig();
+      if (!configValidation.valid) {
+        throw new Error(
+          `Missing KRNL configuration: ${configValidation.missing.join(', ')}. ` +
+          `Please set these environment variables after creating workflows in KRNL Studio.`
+        );
       }
 
+      // Step 1: KRNL Authorization
+      if (!isAuthorized) {
+        toast.info("Authorizing KRNL delegated account...");
+        console.log("🔐 Starting KRNL authorization...");
+        
+        if (!enableSmartAccount) {
+          throw new Error("KRNL SDK not properly initialized");
+        }
+        
+        const authResult = await enableSmartAccount();
+        console.log("✅ Authorization result:", authResult);
+        
+        if (!authResult) {
+          throw new Error("Failed to authorize KRNL delegated account");
+        }
+        
+        toast.success("KRNL account authorized!");
+        await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        console.log("✓ Account already authorized for KRNL");
+      }
+
+      // Step 2: Generate verification codes
       toast.info("Generating verification codes...");
       const generated = await generateVerificationCodes(finalEventId, maxAttendeesNum);
       codes = generated.codes;
       merkleRoot = generated.merkleRoot;
 
-      if (!BYPASS_MODE) {
-        toast.info("Preparing KRNL workflow...");
-        const workflowTemplate = createEventWorkflowTemplate(
-          finalEventId,
-          eventName,
-          merkleRoot,
-          maxAttendeesNum,
-          address,
-          CONTRACT_ADDRESS
-        );
+      // Step 3: Prepare workflow parameters
+      toast.info("Preparing KRNL workflow...");
+      console.log("📋 Creating workflow parameters...");
+      
+      const workflowParams = createEventWorkflowParams({
+        eventId: finalEventId,
+        eventName,
+        merkleRoot,
+        maxAttendees: maxAttendeesNum,
+        contractAddress: CONTRACT_ADDRESS
+      });
 
-        let authData: any = null;
-        let targetContractAddress = CONTRACT_ADDRESS;
+      console.log("🚀 Executing KRNL workflow with params:", workflowParams);
+      toast.info("Executing workflow through KRNL Protocol...");
 
-        try {
-          // Standard KRNL
-          if (!executeWorkflow) throw new Error("No hook");
-          const workflowResult = await executeWorkflow(workflowTemplate as any);
-          if (workflowResult?.success && (workflowResult as any).authData) {
-            authData = (workflowResult as any).authData;
-          } else {
-            throw new Error((workflowResult as any).error || "KRNL Rejected");
-          }
-        } catch (primaryError) {
-          // Fallback Self-Hosted
-          console.warn("Switching to Self-Hosted...");
-          targetContractAddress = CONTRACT_ADDRESS;
-
-          const response = await fetch('/api/krnl-signer', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              eventId: finalEventId,
-              eventName,
-              merkleRoot,
-              maxAttendees: maxAttendeesNum,
-              userAddress: address
-            })
-          });
-          const signerResult = await response.json();
-          if (signerResult.success) authData = signerResult.authData;
-          else throw new Error("Self-Hosted Signer Failed");
-        }
-
-        if (!authData) throw new Error("Auth Failed");
-
-        toast.info("Submitting transaction...");
-        const contractAbi = (ModuPassTargetBase as any).abi ? (ModuPassTargetBase as any).abi : ModuPassTargetBase;
-
-        const hash = await writeContractAsync({
-          address: targetContractAddress as `0x${string}`,
-          abi: contractAbi,
-          functionName: "createEvent",
-          args: [authData],
-          gas: BigInt(500000),
-          account: address as `0x${string}`
-        });
-
-        console.log("Transaction submitted:", hash);
-        // Optimistic Success immediately
-        triggerOptimisticSuccess(hash, codes, merkleRoot);
+      // Reset workflow steps before execution
+      if (resetSteps) {
+        resetSteps();
       }
+
+      // Step 4: Execute workflow using KRNL Studio workflow ID
+      // Note: The workflow template is pre-configured in KRNL Studio
+      // We just provide the parameter values to inject
+      const workflowResult = await executeWorkflowFromTemplate(
+        KRNL_WORKFLOW_IDS.createEvent!,
+        workflowParams
+      );
+      
+      console.log("📊 Workflow execution result:", workflowResult);
+      console.log("📊 Current status code:", statusCode);
+      console.log("📊 Current step:", currentStep);
+
+      // Check workflow status using proper status codes
+      if (statusCode === WorkflowStatusCode.FAILED || 
+          statusCode === WorkflowStatusCode.INVALID ||
+          statusCode === WorkflowStatusCode.WORKFLOW_NOT_FOUND) {
+        const errorMsg = krnlError || "Workflow execution failed";
+        throw new Error(`KRNL workflow failed: ${errorMsg}`);
+      }
+
+      // For successful workflow, the result should contain transaction information
+      // The exact structure depends on KRNL's response format
+      const txHash = (workflowResult as any)?.transactionHash || 
+                     (workflowResult as any)?.hash ||
+                     (workflowResult as any)?.txHash;
+      
+      if (!txHash) {
+        console.warn("⚠️ No transaction hash in workflow result, using optimistic approach");
+        // For demo purposes, if workflow executed but no hash, consider it pending
+        toast.warning("Workflow submitted, transaction pending confirmation");
+        triggerOptimisticSuccess("pending", codes, merkleRoot);
+        return;
+      }
+
+      console.log("✅ Workflow executed successfully. Transaction:", txHash);
+      toast.success("Workflow executed! Waiting for confirmation...");
+
+      // Wait for blockchain confirmation
+      const receipt = await waitForTransactionReceipt(config, { hash: txHash as `0x${string}` });
+
+      if (receipt.status === "reverted") {
+        throw new Error("Transaction reverted on-chain");
+      }
+
+      console.log("✅ Transaction confirmed:", receipt.transactionHash);
+      triggerOptimisticSuccess(txHash, codes, merkleRoot);
 
     } catch (error: any) {
       console.error("Error creating event:", error);
-
-      // FAILURE FALLBACK (Unconditional Success)
-      console.log("⚠️ Error caught. Triggering Unconditional Success via Overlay.");
-      const fakeHash = `0x${Array.from({ length: 64 }, () => Math.floor(Math.random() * 16).toString(16)).join('')}`;
-
-      if (codes.length === 0) {
-        codes = ["CODE-DEMO-1", "CODE-DEMO-2"];
-        merkleRoot = "0x00";
-      }
-
-      triggerOptimisticSuccess(fakeHash, codes, merkleRoot);
-
+      toast.error(error.message || "Failed to create event");
     } finally {
       setIsProcessing(false);
     }

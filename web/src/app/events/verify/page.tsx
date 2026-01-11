@@ -2,7 +2,7 @@
 
 import { useState, Suspense } from "react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
-import { useKRNL } from '@krnl-dev/sdk-react-7702';
+import { useKRNL, WorkflowStatusCode } from '@krnl-dev/sdk-react-7702';
 import { useSearchParams } from "next/navigation";
 import { ethers } from "ethers";
 import { Card } from "@/components/ui/card";
@@ -14,6 +14,11 @@ import { toast } from "sonner";
 import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
 
 import { usePrivy } from "@privy-io/react-auth";
+import { 
+  verifyAttendanceWorkflowParams,
+  KRNL_WORKFLOW_IDS,
+  validateWorkflowConfig
+} from "@/lib/krnl-workflows";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -37,7 +42,14 @@ function VerifyPageContent() {
         proofHash: string;
     } | null>(null);
 
-    const { executeWorkflow } = useKRNL() as any;
+    const { 
+        executeWorkflowFromTemplate,
+        isAuthorized,
+        enableSmartAccount,
+        statusCode,
+        error: krnlError,
+        resetSteps
+    } = useKRNL();
 
     const handleVerify = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -52,8 +64,13 @@ function VerifyPageContent() {
             return;
         }
 
-        if (!process.env.NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID) {
-            toast.error("KRNL Workflow ID not configured");
+        // Validate KRNL configuration
+        const configValidation = validateWorkflowConfig();
+        if (!configValidation.valid) {
+            toast.error(
+                `Missing KRNL configuration: ${configValidation.missing.join(', ')}. ` +
+                `Please configure workflows in KRNL Studio first.`
+            );
             return;
         }
 
@@ -65,99 +82,78 @@ function VerifyPageContent() {
         setIsVerifying(true);
 
         try {
-            // Step 1: Execute KRNL Workflow (with Fallback)
-            let authData;
-            try {
-                toast.info("Requesting KRNL verification...");
-                if (!executeWorkflow) throw new Error("executeWorkflow missing");
-
-                const result = await executeWorkflow(process.env.NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID!, {
-                    eventId,
-                    code: verificationCode,
-                    attendee: address
-                });
-
-                if (result?.success === false) throw new Error(result.error || "KRNL Rejected");
-                authData = result.authData || result;
-
-            } catch (err: any) {
-                console.warn("⚠️ KRNL Verification Failed, using Demo Fallback:", err);
-                toast.warning("KRNL busy. Switching to Demo Mode...");
-
-                // Fallback: Generate Mock Proof
-                const { getMockAuthData } = await import("@/lib/krnl-workflows");
-                authData = await getMockAuthData("verifyAttendance", {
-                    eventId,
-                    code: verificationCode,
-                    attendee: address
-                });
+            // Step 1: Ensure account is authorized for KRNL
+            if (!isAuthorized) {
+                toast.info("Authorizing KRNL delegated account...");
+                
+                if (!enableSmartAccount) {
+                    throw new Error("KRNL SDK not properly initialized");
+                }
+                
+                const authResult = await enableSmartAccount();
+                
+                if (!authResult) {
+                    throw new Error("Failed to authorize KRNL delegated account");
+                }
+                
+                toast.success("KRNL account authorized!");
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
-            if (!authData) throw new Error("Failed to generate proof");
-
-            // Step 2: Submit to blockchain
-            toast.info("Verifying attendance on-chain...");
-
-            const txHash = await writeContractAsync({
-                address: CONTRACT_ADDRESS as `0x${string}`,
-                abi: ModuPassTargetBase as any,
-                functionName: "verifyAttendance",
-                args: [authData],
-                // Explicitly set gas limit to avoid estimation errors on fallback
-                gas: BigInt(300000)
+            // Step 2: Prepare workflow parameters
+            toast.info("Preparing KRNL verification workflow...");
+            
+            const workflowParams = verifyAttendanceWorkflowParams({
+                eventId,
+                attendeeAddress: address as string,
+                code: verificationCode,
+                contractAddress: CONTRACT_ADDRESS
             });
 
-            // Correction: The contract signature for `verifyAttendance` is:
-            // function verifyAttendance(AuthData calldata authData) external requireAuth(authData)
-            // It ONLY takes authData. All other data is inside authData.result.
-            // So my previous code passing [authData, eventId, address] was wrong for `ModuPassTargetBase.sol`!
-            // But `ModuPassKRNL.sol` (legacy) took arguments. 
-            // `ModuPassTargetBase.sol` takes ONLY authData.
-            // I must correct the args here to be just [authData].
+            console.log("🚀 Executing KRNL verification workflow:", workflowParams);
+            toast.info("Verifying through KRNL Protocol...");
 
-            // Re-checking `ModuPassTargetBase.sol`:
-            /*
-            function verifyAttendance(AuthData calldata authData) 
-                external 
-                requireAuth(authData) 
-            {
-               // decode authData.result
-            */
-            // Yes, it only takes one argument.
+            // Reset workflow steps
+            if (resetSteps) {
+                resetSteps();
+            }
 
-            // I should also check `createEvent` signature in `ModuPassTargetBase.sol`.
-            /*
-            function createEvent(AuthData calldata authData) 
-                external 
-                requireAuth(authData)
-            */
-            // It also ONLY takes `authData`!
+            // Step 3: Execute workflow using KRNL Studio workflow ID
+            const workflowResult = await executeWorkflowFromTemplate(
+                KRNL_WORKFLOW_IDS.verifyAttendance!,
+                workflowParams
+            );
 
-            // Oops, my previous update to `CreateEventPage` passed multiple args:
-            /*
-            args: [
-              authData,
-              eventId,
-              eventName,
-              merkleRoot as `0x${string}`,
-              BigInt(maxAttendeesNum)
-            ]
-            */
-            // This is wrong for `ModuPassTargetBase`. It was correct for `ModuPassKRNL` (legacy).
-            // I need to fix `CreateEventPage` as well.
+            console.log("📊 Verification workflow result:", workflowResult);
+            console.log("📊 Status code:", statusCode);
 
-            // Wait, does `useWriteContract` automatically handle overloaded functions? No.
-            // If the ABI for `ModuPassTargetBase` only has `createEvent(AuthData)`, then passing more args will fail.
+            // Check workflow status
+            if (statusCode === WorkflowStatusCode.FAILED || 
+                statusCode === WorkflowStatusCode.INVALID ||
+                statusCode === WorkflowStatusCode.WORKFLOW_NOT_FOUND) {
+                const errorMsg = krnlError || "Verification workflow failed";
+                throw new Error(`KRNL verification failed: ${errorMsg}`);
+            }
 
-            // I need to correct `CreateEventPage` args too.
+            // Extract transaction hash from workflow result
+            const txHash = (workflowResult as any)?.transactionHash || 
+                           (workflowResult as any)?.hash ||
+                           (workflowResult as any)?.txHash;
+
+            if (!txHash) {
+                throw new Error("No transaction hash returned from KRNL workflow");
+            }
 
             toast.info("Transaction submitted! Waiting for confirmation...");
+
+            // Wait for confirmation (optional - KRNL handles this)
+            // The workflow result should already include confirmation
 
             // Success!
             setVerificationComplete({
                 eventId,
                 txHash,
-                proofHash: authData.id
+                proofHash: (workflowResult as any)?.proofHash || (workflowResult as any)?.id || "verified"
             });
 
             toast.success("Attendance verified successfully!");
@@ -168,7 +164,16 @@ function VerifyPageContent() {
 
         } catch (error: any) {
             console.error("Verification error:", error);
+            console.log(`[DEBUG UI] Failed to verify EventID: '${eventId}' with Code: '${verificationCode}'`);
+
+            // Revert to real error handling
             toast.error(error.message || "Failed to verify attendance");
+
+            // If it's the "No event" error, give a helpful hint
+            if (error.message?.includes("No event") || error.data?.message?.includes("No event")) {
+                toast.error("Contract says 'No Event'. Check Event ID exactly!");
+            }
+
         } finally {
             setIsVerifying(false);
         }
