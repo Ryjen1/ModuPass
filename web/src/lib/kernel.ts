@@ -1,6 +1,9 @@
 /**
  * Kernel utilities for ModuPass
- * Validation and proof generation functions
+ * Validation and helper functions for event management
+ * 
+ * Note: This module provides utility functions for validation.
+ * All workflow execution is handled by KRNL SDK in krnl-workflows.ts
  */
 
 export interface CreateEventData {
@@ -122,41 +125,8 @@ function generateProofHash(proof: AttendanceProofData): string {
 }
 
 /**
- * Execute KRNL workflow for attendance verification
+ * Validate Ethereum address format
  */
-export async function executeAttendanceWorkflow(
-    input: KRNLWorkflowInput
-): Promise<KRNLWorkflowResult> {
-    try {
-        if (!input.eventId || !input.attendeeAddress) {
-            throw new Error('Missing required fields: eventId and attendeeAddress');
-        }
-
-        if (!/^0x[a-fA-F0-9]{40}$/.test(input.attendeeAddress)) {
-            throw new Error('Invalid Ethereum address format');
-        }
-
-        const proofData = generateAttendanceProof(
-            input.eventId,
-            input.attendeeAddress
-        );
-
-        const proofBytes = proofToBytes(proofData);
-
-        return {
-            success: true,
-            proofHash: generateProofHash(proofData),
-            metadata: {
-                proofData,
-                proofBytes,
-                workflowId: 'modupass-attendance-verification',
-                executedAt: new Date().toISOString(),
-            },
-        };
-    } catch (error) {
-        return {
-            success: false,
-            error: error instanceof Error ? error.message : 'Unknown error',
-        };
-    }
+export function validateAddress(address: string): boolean {
+    return /^0x[a-fA-F0-9]{40}$/.test(address);
 }

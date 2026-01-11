@@ -103,6 +103,24 @@ export function useEvents() {
                 }
             }
 
+            // 3. Merge with Local "Demo Mode" Events
+            // This ensures events show up immediately even if transaction is pending/reverted
+            try {
+                const stored = localStorage.getItem("ModuPass_LocalEvents");
+                if (stored) {
+                    const localEvents = JSON.parse(stored) as EventData[];
+                    // Filter out any duplicates that might have actually made it on-chain
+                    const uniqueLocal = localEvents.filter(local =>
+                        !loadedEvents.some(chain => chain.id === local.id)
+                    );
+
+                    // Add local events to the top (newest)
+                    loadedEvents.unshift(...uniqueLocal);
+                }
+            } catch (e) {
+                console.warn("Error reading local demo events", e);
+            }
+
             setEvents(loadedEvents);
         } catch (err: any) {
             console.error("Error loading events:", err);
