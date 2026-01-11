@@ -97,6 +97,22 @@ SOLUTION_KRNL_STUDIO.md
 START_HERE.md
 USE_THIS_CONTRACT.md
 
+# Kombai
+.kombai/
+
+# Private/Personal Files
+KRNL_Support_Request.txt
+ModuPass_Proposal.txt
+ModuPass_Demo_Script*.txt
+
+# Test/Debug Scripts
+contracts/scripts/check-verify.ts
+contracts/scripts/debug-contract.ts
+contracts/scripts/test-demo-contract.js
+contracts/scripts/test-end-to-end.js
+contracts/scripts/decode-revert.js
+contracts/scripts/list-events.js
+
 # Misc
 .vercel
 .netlify
