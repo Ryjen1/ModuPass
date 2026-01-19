@@ -84,17 +84,17 @@ export default function VerifyPage() {
             console.log("KRNL Workflow DSL:", workflowDSL);
 
             // KRNL handles EVERYTHING - contract interaction included!
-            const result = await runWorkflow(workflowDSL);
+            const result = await runWorkflow(workflowDSL) as any;
             console.log("KRNL Workflow Result:", result);
 
             // Get transaction hash from KRNL result
-            const txHash = result.transactionHash || result.txHash || "0x_pending_" + Date.now();
+            const txHash = result?.transactionHash || result?.txHash || "0x_pending_" + Date.now();
 
             // Success!
             setVerificationComplete({
                 eventId,
                 txHash,
-                proofHash: result.authData?.id || result.id || "0x_proof_" + Date.now()
+                proofHash: result?.authData?.id || result?.id || "0x_proof_" + Date.now()
             });
 
             toast.success("Attendance verified successfully!");

@@ -159,11 +159,11 @@ export default function CreateEventPage() {
       console.log("KRNL Workflow DSL:", workflowDSL);
 
       // KRNL handles EVERYTHING - contract interaction included!
-      const result = await runWorkflow(workflowDSL);
+      const result = await runWorkflow(workflowDSL) as any;
       console.log("KRNL Workflow Result:", result);
 
       // Get transaction hash from KRNL result
-      const txHash = result.transactionHash || result.txHash || "0x_pending_" + Date.now();
+      const txHash = result?.transactionHash || result?.txHash || "0x_pending_" + Date.now();
 
       toast.success("Event created successfully!");
 
