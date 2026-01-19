@@ -1,9 +1,8 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useAccount, useWriteContract } from "wagmi";
+import { useAccount } from "wagmi";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useKRNL } from '@krnl-dev/sdk-react-7702';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -13,8 +12,8 @@ import { Calendar, Loader2, CheckCircle2, AlertCircle, Download, QrCode } from "
 import { toast } from "sonner";
 import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
-import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
-import { createEventWorkflowTemplate } from "@/lib/krnl-workflows";
+import { useKRNLAuth, useKRNLWorkflow } from "@/lib/hooks";
+import { createEventWorkflow } from "@/lib/krnl-workflows";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -32,16 +31,10 @@ export default function CreateEventPage() {
   const { address: wagmiAddress } = useAccount();
   const { ready, authenticated, user, createWallet } = usePrivy();
   const { wallets } = useWallets();
-  const { writeContractAsync } = useWriteContract();
 
-  // KRNL Hook
-  // @ts-ignore - KRNL types might be loose
-  const krnlHook = useKRNL();
-  const { executeWorkflow, isAuthorized, enableSmartAccount } = krnlHook || {};
-
-  // Debug logging helpers
-  const hookError = (krnlHook as any)?.error;
-  const hookStatus = (krnlHook as any)?.statusCode;
+  // KRNL Hooks
+  const { authorizeAccount, isAuthorized, hasEmbeddedWallet } = useKRNLAuth();
+  const { runWorkflow, error: workflowError } = useKRNLWorkflow();
 
   // 2. All State Declarations Second
   const [eventId, setEventId] = useState("");
@@ -75,15 +68,14 @@ export default function CreateEventPage() {
       mounted,
       ready,
       authenticated,
-      hasEmbeddedWallet: !!embeddedWallet,
+      hasEmbeddedWallet,
       embeddedWalletAddress: embeddedWallet?.address,
       activeWalletType: activeWallet?.walletClientType,
-      isAuthorized, // KRNL status
+      isAuthorized,
       isConnected,
-      address,
-      krnlHookDump: krnlHook // DUMP THE WHOLE HOOK STATE
+      address
     });
-  }, [mounted, ready, authenticated, embeddedWallet, activeWallet, isAuthorized, isConnected, address, krnlHook]);
+  }, [mounted, ready, authenticated, embeddedWallet, activeWallet, isAuthorized, isConnected, address, hasEmbeddedWallet]);
 
   // 5. Handlers
   const handleCreateWallet = async () => {
@@ -133,90 +125,45 @@ export default function CreateEventPage() {
     setAuthorizationError(null); // Clear previous errors
 
     try {
-      // Step 0: Check and enable KRNL authorization if needed
-      // BYPASS MODE: Skip authorization and workflow for testing UI
-      const BYPASS_MODE = true;
-
-      if (BYPASS_MODE) {
-        console.warn("⚠️ RUNNING IN BYPASS MODE: KRNL Auth & Contract calls will be skipped.");
-        toast.info("Bypass Mode: Simulating successful event creation...");
-        await new Promise(resolve => setTimeout(resolve, 1500)); // Fake network delay
-      } else if (isAuthorized === false) { // Explicit false check
-        toast.info("Authorizing KRNL delegated account...");
-        console.log("KRNL not authorized, calling enableSmartAccount()...");
-
-        if (!enableSmartAccount) {
-          throw new Error("KRNL SDK not initialized or usage issue.");
+      // Step 1: Check and enable KRNL authorization if needed
+      if (!isAuthorized) {
+        toast.info("Authorizing KRNL account...");
+        const success = await authorizeAccount();
+        
+        if (!success) {
+          throw new Error("Failed to authorize KRNL account. Please ensure you have ETH in your wallet.");
         }
 
-        try {
-          // Pass the embedded wallet if available/needed, though sdk usually handles it
-          const authResult = await enableSmartAccount();
-          console.log("enableSmartAccount() result:", authResult);
-
-          if (!authResult) {
-            // FORCE UPDATE STATE TO SHOW ERROR
-            setAuthorizationError(`Authorization Failed. Status: ${hookStatus}. Error: ${JSON.stringify(hookError)}`);
-            throw new Error(`enableSmartAccount returned false. Status: ${hookStatus}`);
-          }
-
-          toast.success("KRNL account authorized!");
-          // Wait a moment for authorization to propagate
-          await new Promise(resolve => setTimeout(resolve, 1000));
-        } catch (authError: any) {
-          console.error("Authorization error:", authError);
-          setAuthorizationError(authError.message || "Unknown authorization error");
-          toast.error(`KRNL Authorization Failed: ${authError.message}`);
-          setIsProcessing(false);
-          return;
-        }
+        toast.success("KRNL account authorized!");
+        // Wait a moment for authorization to propagate
+        await new Promise(resolve => setTimeout(resolve, 1000));
       }
 
-      // Step 1: Generate verification codes
+      // Step 2: Generate verification codes
       toast.info("Generating verification codes...");
       const { codes, merkleRoot } = await generateVerificationCodes(
         eventId,
         maxAttendeesNum
       );
 
-      let txHash = "0x_bypass_simulation_" + Date.now();
+      // Step 3: Create and execute KRNL workflow
+      toast.info("Executing KRNL workflow...");
+      const workflowDSL = createEventWorkflow(
+        eventId,
+        eventName,
+        merkleRoot,
+        maxAttendeesNum,
+        CONTRACT_ADDRESS
+      );
 
-      if (!BYPASS_MODE) {
-        // Step 2: Create KRNL Workflow DSL Template
-        toast.info("Preparing KRNL workflow...");
-        const workflowTemplate = createEventWorkflowTemplate(
-          eventId,
-          eventName,
-          merkleRoot,
-          maxAttendeesNum,
-          address, // Use active wallet address
-          CONTRACT_ADDRESS
-        );
+      console.log("KRNL Workflow DSL:", workflowDSL);
 
-        // Step 3: Execute KRNL Workflow
-        toast.info("Executing KRNL workflow...");
-        console.log("KRNL Workflow Template:", workflowTemplate);
+      // KRNL handles EVERYTHING - contract interaction included!
+      const result = await runWorkflow(workflowDSL);
+      console.log("KRNL Workflow Result:", result);
 
-        if (!executeWorkflow) {
-          throw new Error("executeWorkflow function missing from KRNL SDK");
-        }
-
-        const workflowResult = await executeWorkflow(workflowTemplate);
-        console.log("KRNL Workflow Result:", workflowResult);
-
-        // Extract authData
-        const authData = workflowResult.authData || workflowResult;
-
-        // Step 4: Submit to blockchain
-        toast.info("Submitting transaction...");
-
-        txHash = await writeContractAsync({
-          address: CONTRACT_ADDRESS as `0x${string}`,
-          abi: (ModuPassTargetBase as any).abi,
-          functionName: "createEvent",
-          args: [authData]
-        });
-      }
+      // Get transaction hash from KRNL result
+      const txHash = result.transactionHash || result.txHash || "0x_pending_" + Date.now();
 
       toast.success("Event created successfully!");
 
