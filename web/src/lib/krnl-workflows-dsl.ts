@@ -1,19 +1,12 @@
-/**
- * KRNL Workflow DSL Definitions for ModuPass
- * 
- * These workflows use the configurations created in KRNL Studio.
- * The workflows are exported from Studio and injected with runtime parameters.
- */
-
-import { 
-  createEventStudioWorkflow, 
+import {
+  createEventStudioWorkflow,
   verifyAttendanceStudioWorkflow,
   injectWorkflowParams
 } from './krnl-workflows-studio';
 
 /**
  * Create Event Workflow
- * Uses the "create" workflow from KRNL Studio
+ * Injects parameters for KRNL Studio workflow
  */
 export function createEventWorkflowDSL(params: {
   contractAddress: string;
@@ -33,7 +26,7 @@ export function createEventWorkflowDSL(params: {
 
 /**
  * Verify Attendance Workflow
- * Uses the "verify" workflow from KRNL Studio
+ * Injects parameters for KRNL Studio workflow
  */
 export function verifyAttendanceWorkflowDSL(params: {
   contractAddress: string;
@@ -41,13 +34,10 @@ export function verifyAttendanceWorkflowDSL(params: {
   attendeeAddress: string;
   code: string;
 }) {
-  const timestamp = Math.floor(Date.now() / 1000);
-  
   return injectWorkflowParams(verifyAttendanceStudioWorkflow, {
     CONTRACT_ADDRESS: params.contractAddress,
     EVENT_ID: params.eventId,
     ATTENDEE_ADDRESS: params.attendeeAddress,
-    CODE: params.code,
-    TIMESTAMP: timestamp
+    CODE: params.code
   });
 }
