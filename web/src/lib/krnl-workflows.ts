@@ -1,14 +1,9 @@
 /**
- * KRNL Workflow Templates for ModuPass
+ * KRNL Workflow Parameters for ModuPass
  * 
- * This module defines workflow templates using KRNL's Domain-Specific Language (DSL)
- * for event creation and attendance verification operations.
- * 
- * IMPORTANT: Workflows must be pre-created in KRNL Studio (https://studio.krnl.xyz)
- * before use. The workflow IDs should be stored in environment variables.
+ * This module defines parameter helpers for KRNL workflows.
+ * Workflows are executed directly via DSL, not via Studio workflow IDs.
  */
-
-import type { WorkflowObject } from '@krnl-dev/sdk-react-7702';
 
 /**
  * Create event workflow parameters
@@ -72,26 +67,13 @@ export function verifyAttendanceWorkflowParams(
 }
 
 /**
- * Get workflow IDs from environment
- * These IDs are obtained from KRNL Studio after creating workflows
- */
-export const KRNL_WORKFLOW_IDS = {
-  createEvent: process.env.NEXT_PUBLIC_KRNL_CREATE_EVENT_WORKFLOW_ID,
-  verifyAttendance: process.env.NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID
-};
-
-/**
- * Validate that required workflow IDs are configured
+ * Validate contract address is configured
  */
 export function validateWorkflowConfig(): { valid: boolean; missing: string[] } {
   const missing: string[] = [];
   
-  if (!KRNL_WORKFLOW_IDS.createEvent) {
-    missing.push('NEXT_PUBLIC_KRNL_CREATE_EVENT_WORKFLOW_ID');
-  }
-  
-  if (!KRNL_WORKFLOW_IDS.verifyAttendance) {
-    missing.push('NEXT_PUBLIC_KRNL_VERIFY_ATTENDANCE_WORKFLOW_ID');
+  if (!process.env.NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS) {
+    missing.push('NEXT_PUBLIC_DELEGATED_ACCOUNT_ADDRESS');
   }
   
   return {

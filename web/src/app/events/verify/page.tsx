@@ -1,24 +1,19 @@
 "use client";
 
 import { useState, Suspense } from "react";
-import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
+import { useAccount } from "wagmi";
 import { useKRNL, WorkflowStatusCode } from '@krnl-dev/sdk-react-7702';
 import { useSearchParams } from "next/navigation";
-import { ethers } from "ethers";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Shield, Loader2, CheckCircle2, AlertCircle, QrCode } from "lucide-react";
 import { toast } from "sonner";
-import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
-
 import { usePrivy } from "@privy-io/react-auth";
-import { 
-  verifyAttendanceWorkflowParams,
-  KRNL_WORKFLOW_IDS,
-  validateWorkflowConfig
-} from "@/lib/krnl-workflows";
+import { validateWorkflowConfig } from "@/lib/krnl-workflows";
+import { verifyAttendanceWorkflowDSL } from "@/lib/krnl-workflows-dsl";
+import { useKRNLWorkflow } from "@/lib/hooks";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -43,13 +38,16 @@ function VerifyPageContent() {
     } | null>(null);
 
     const { 
-        executeWorkflowFromTemplate,
         isAuthorized,
-        enableSmartAccount,
+        enableSmartAccount
+    } = useKRNL();
+    
+    const {
+        runWorkflow,
         statusCode,
         error: krnlError,
         resetSteps
-    } = useKRNL();
+    } = useKRNLWorkflow();
 
     const handleVerify = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -69,7 +67,7 @@ function VerifyPageContent() {
         if (!configValidation.valid) {
             toast.error(
                 `Missing KRNL configuration: ${configValidation.missing.join(', ')}. ` +
-                `Please configure workflows in KRNL Studio first.`
+                `Please check your environment variables.`
             );
             return;
         }
@@ -100,29 +98,24 @@ function VerifyPageContent() {
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
-            // Step 2: Prepare workflow parameters
+            // Step 2: Create workflow DSL
             toast.info("Preparing KRNL verification workflow...");
             
-            const workflowParams = verifyAttendanceWorkflowParams({
+            const workflowDSL = verifyAttendanceWorkflowDSL({
+                contractAddress: CONTRACT_ADDRESS,
                 eventId,
                 attendeeAddress: address as string,
-                code: verificationCode,
-                contractAddress: CONTRACT_ADDRESS
+                code: verificationCode
             });
 
-            console.log("🚀 Executing KRNL verification workflow:", workflowParams);
+            console.log("🚀 Executing KRNL verification workflow:", workflowDSL);
             toast.info("Verifying through KRNL Protocol...");
 
             // Reset workflow steps
-            if (resetSteps) {
-                resetSteps();
-            }
+            resetSteps();
 
-            // Step 3: Execute workflow using KRNL Studio workflow ID
-            const workflowResult = await executeWorkflowFromTemplate(
-                KRNL_WORKFLOW_IDS.verifyAttendance!,
-                workflowParams
-            );
+            // Step 3: Execute workflow using KRNL SDK
+            const workflowResult = await runWorkflow(workflowDSL as any);
 
             console.log("📊 Verification workflow result:", workflowResult);
             console.log("📊 Status code:", statusCode);

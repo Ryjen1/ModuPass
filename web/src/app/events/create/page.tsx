@@ -7,7 +7,6 @@ import { waitForTransactionReceipt } from "wagmi/actions";
 import { formatEther } from "viem";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
 import { useKRNL, WorkflowStatusCode } from '@krnl-dev/sdk-react-7702';
-import type { WorkflowObject } from '@krnl-dev/sdk-react-7702';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -18,11 +17,9 @@ import { toast } from "sonner";
 import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
 import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
-import { 
-  createEventWorkflowParams, 
-  KRNL_WORKFLOW_IDS,
-  validateWorkflowConfig 
-} from "@/lib/krnl-workflows";
+import { validateWorkflowConfig } from "@/lib/krnl-workflows";
+import { createEventWorkflowDSL } from "@/lib/krnl-workflows-dsl";
+import { useKRNLWorkflow } from "@/lib/hooks";
 import { CONTRACT_ADDRESS } from "@/lib/krnl-config";
 
 interface CreatedEventData {
@@ -59,17 +56,18 @@ export default function CreateEventPage() {
     hash: txHash,
   });
 
-  // KRNL Hook - Properly typed with correct types from SDK
+  // KRNL Hooks
   const { 
-    executeWorkflowFromTemplate,
     isAuthorized, 
-    enableSmartAccount,
-    error: krnlError,
-    statusCode,
-    steps,
-    currentStep,
-    resetSteps
+    enableSmartAccount
   } = useKRNL();
+  
+  const {
+    runWorkflow,
+    statusCode,
+    error: krnlError,
+    resetSteps
+  } = useKRNLWorkflow();
 
   // 2. All State Declarations Second
   const [eventId, setEventId] = useState("");
@@ -323,7 +321,7 @@ export default function CreateEventPage() {
       if (!configValidation.valid) {
         throw new Error(
           `Missing KRNL configuration: ${configValidation.missing.join(', ')}. ` +
-          `Please set these environment variables after creating workflows in KRNL Studio.`
+          `Please check your environment variables.`
         );
       }
 
@@ -355,37 +353,29 @@ export default function CreateEventPage() {
       codes = generated.codes;
       merkleRoot = generated.merkleRoot;
 
-      // Step 3: Prepare workflow parameters
+      // Step 3: Create workflow DSL
       toast.info("Preparing KRNL workflow...");
-      console.log("📋 Creating workflow parameters...");
+      console.log("📋 Creating workflow DSL...");
       
-      const workflowParams = createEventWorkflowParams({
+      const workflowDSL = createEventWorkflowDSL({
+        contractAddress: CONTRACT_ADDRESS,
         eventId: finalEventId,
         eventName,
         merkleRoot,
-        maxAttendees: maxAttendeesNum,
-        contractAddress: CONTRACT_ADDRESS
+        maxAttendees: maxAttendeesNum
       });
 
-      console.log("🚀 Executing KRNL workflow with params:", workflowParams);
+      console.log("🚀 Executing KRNL workflow:", workflowDSL);
       toast.info("Executing workflow through KRNL Protocol...");
 
       // Reset workflow steps before execution
-      if (resetSteps) {
-        resetSteps();
-      }
+      resetSteps();
 
-      // Step 4: Execute workflow using KRNL Studio workflow ID
-      // Note: The workflow template is pre-configured in KRNL Studio
-      // We just provide the parameter values to inject
-      const workflowResult = await executeWorkflowFromTemplate(
-        KRNL_WORKFLOW_IDS.createEvent!,
-        workflowParams
-      );
+      // Step 4: Execute workflow using KRNL SDK
+      const workflowResult = await runWorkflow(workflowDSL as any);
       
       console.log("📊 Workflow execution result:", workflowResult);
       console.log("📊 Current status code:", statusCode);
-      console.log("📊 Current step:", currentStep);
 
       // Check workflow status using proper status codes
       if (statusCode === WorkflowStatusCode.FAILED || 
