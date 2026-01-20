@@ -14,6 +14,7 @@ import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
 import { useKRNLAuth, useKRNLWorkflow } from "@/lib/hooks";
 import { createEventWorkflow } from "@/lib/krnl-workflows";
+import { useKRNL } from "@krnl-dev/sdk-react-7702";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -35,6 +36,9 @@ export default function CreateEventPage() {
   // KRNL Hooks
   const { authorizeAccount, isAuthorized, hasEmbeddedWallet } = useKRNLAuth();
   const { runWorkflow, error: workflowError } = useKRNLWorkflow();
+
+  // Get KRNL wallet info for debugging
+  const krnlState = useKRNL();
 
   // 2. All State Declarations Second
   const [eventId, setEventId] = useState("");
@@ -64,7 +68,8 @@ export default function CreateEventPage() {
   // Debug logging
   useEffect(() => {
     if (!mounted) return;
-    console.log("CreateEventPage Connection Debug:", {
+
+    const debugInfo = {
       mounted,
       ready,
       authenticated,
@@ -74,7 +79,18 @@ export default function CreateEventPage() {
       isAuthorized,
       isConnected,
       address
-    });
+    };
+
+    console.log("CreateEventPage Connection Debug:", debugInfo);
+
+    // CRITICAL: Show which wallet needs funding
+    if (embeddedWallet?.address) {
+      console.log("%c🔑 FUND THIS WALLET FOR KRNL:", "color: #10b981; font-size: 16px; font-weight: bold");
+      console.log("%c" + embeddedWallet.address, "color: #10b981; font-size: 14px; font-family: monospace");
+      console.log("%cThis is your Privy Embedded Wallet - it needs ETH on Sepolia to create events", "color: #fbbf24; font-size: 12px");
+    } else {
+      console.log("%c⚠️ No embedded wallet detected", "color: #ef4444; font-size: 14px; font-weight: bold");
+    }
   }, [mounted, ready, authenticated, embeddedWallet, activeWallet, isAuthorized, isConnected, address, hasEmbeddedWallet]);
 
   // 5. Handlers
@@ -127,16 +143,30 @@ export default function CreateEventPage() {
     try {
       // Step 1: Check and enable KRNL authorization if needed
       if (!isAuthorized) {
+        console.log("🔐 Starting KRNL authorization...");
+        console.log("hasEmbeddedWallet:", hasEmbeddedWallet);
+        console.log("address:", address);
+        console.log("embeddedWallet:", krnlState.embeddedWallet);
+        console.log("KRNL isAuthorized:", isAuthorized);
+
         toast.info("Authorizing KRNL account...");
+
         const success = await authorizeAccount();
-        
+
+        console.log("Authorization result:", success);
+
         if (!success) {
-          throw new Error("Failed to authorize KRNL account. Please ensure you have ETH in your wallet.");
+          const errorMsg = !hasEmbeddedWallet
+            ? "No embedded wallet detected. Please reconnect or create embedded wallet."
+            : "Failed to authorize KRNL account. Please ensure you have ETH in your embedded wallet.";
+          throw new Error(errorMsg);
         }
 
         toast.success("KRNL account authorized!");
         // Wait a moment for authorization to propagate
         await new Promise(resolve => setTimeout(resolve, 1000));
+      } else {
+        console.log("✅ Already authorized, skipping authorization step");
       }
 
       // Step 2: Generate verification codes
@@ -365,16 +395,40 @@ export default function CreateEventPage() {
                 />
               </div>
 
-              <div className="bg-muted/30 rounded-lg p-4">
-                <h4 className="font-medium mb-1 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 text-primary" />
-                  Important Info
+              <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+                <h4 className="font-medium mb-2 flex items-center gap-2 text-blue-900 dark:text-blue-100">
+                  <AlertCircle className="w-4 h-4" />
+                  Your Embedded Wallet
                 </h4>
-                <p className="text-sm text-muted-foreground">
-                  KRNL requires ETH in your <strong>Embedded Wallet</strong> (not just MetaMask).
-                  <br />
-                  Check the console (F12) for your Embedded Wallet address and fund it.
+                <p className="text-sm text-blue-800 dark:text-blue-200 mb-3">
+                  KRNL uses your <strong>Privy Embedded Wallet</strong> for gas fees:
                 </p>
+                {embeddedWallet?.address ? (
+                  <div className="space-y-2">
+                    <div className="bg-white dark:bg-slate-900 rounded p-3 font-mono text-sm break-all border border-blue-200 dark:border-blue-700">
+                      {embeddedWallet.address}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(embeddedWallet.address);
+                        toast.success("Address copied to clipboard!");
+                      }}
+                      className="w-full text-xs"
+                    >
+                      Copy Address
+                    </Button>
+                    <p className="text-xs text-blue-700 dark:text-blue-300">
+                      Make sure this wallet has Sepolia ETH before creating events
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    Check the console (F12) for your Embedded Wallet address.
+                  </p>
+                )}
               </div>
 
               <Button

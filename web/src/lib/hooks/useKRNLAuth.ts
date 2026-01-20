@@ -23,22 +23,37 @@ export function useKRNLAuth() {
    */
   const authorizeAccount = useCallback(async () => {
     try {
+      console.log('🔍 Authorization Check:');
+      console.log('  - embeddedWallet exists:', !!embeddedWallet);
+      console.log('  - isAuthorized:', isAuthorized);
+      
       if (!embeddedWallet) {
-        console.warn('No embedded wallet found. User needs to connect wallet via Privy first.');
+        console.error('❌ No embedded wallet found. User needs to connect wallet via Privy first.');
         return false;
       }
 
       if (!isAuthorized) {
+        console.log('⏳ Calling enableSmartAccount...');
         const success = await enableSmartAccount();
+        console.log('✅ enableSmartAccount result:', success);
+        
         if (success) {
-          console.log('Account is now authorized for KRNL workflows');
+          console.log('✅ Account is now authorized for KRNL workflows');
+        } else {
+          console.error('❌ enableSmartAccount returned false - check wallet balance');
         }
         return success;
       }
 
+      console.log('✅ Already authorized');
       return true;
-    } catch (error) {
-      console.error('Failed to authorize account:', error);
+    } catch (error: any) {
+      console.error('❌ Failed to authorize account:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        error: error
+      });
       return false;
     }
   }, [embeddedWallet, isAuthorized, enableSmartAccount]);
