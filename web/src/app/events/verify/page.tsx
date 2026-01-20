@@ -26,7 +26,7 @@ function VerifyPageContent() {
     const isConnected = authenticated || isWagmiConnected;
     const address = wagmiAddress || user?.wallet?.address;
 
-    const { writeContractAsync } = useWriteContract();
+
 
     const [eventId, setEventId] = useState(searchParams.get("event") || searchParams.get("eventId") || "");
     const [verificationCode, setVerificationCode] = useState(searchParams.get("code") || "");
@@ -37,11 +37,11 @@ function VerifyPageContent() {
         proofHash: string;
     } | null>(null);
 
-    const { 
+    const {
         isAuthorized,
         enableSmartAccount
     } = useKRNL();
-    
+
     const {
         runWorkflow,
         statusCode,
@@ -83,24 +83,24 @@ function VerifyPageContent() {
             // Step 1: Ensure account is authorized for KRNL
             if (!isAuthorized) {
                 toast.info("Authorizing KRNL delegated account...");
-                
+
                 if (!enableSmartAccount) {
                     throw new Error("KRNL SDK not properly initialized");
                 }
-                
+
                 const authResult = await enableSmartAccount();
-                
+
                 if (!authResult) {
                     throw new Error("Failed to authorize KRNL delegated account");
                 }
-                
+
                 toast.success("KRNL account authorized!");
                 await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
             // Step 2: Create workflow DSL
             toast.info("Preparing KRNL verification workflow...");
-            
+
             const workflowDSL = verifyAttendanceWorkflowDSL({
                 contractAddress: CONTRACT_ADDRESS,
                 eventId,
@@ -121,7 +121,7 @@ function VerifyPageContent() {
             console.log("📊 Status code:", statusCode);
 
             // Check workflow status
-            if (statusCode === WorkflowStatusCode.FAILED || 
+            if (statusCode === WorkflowStatusCode.FAILED ||
                 statusCode === WorkflowStatusCode.INVALID ||
                 statusCode === WorkflowStatusCode.WORKFLOW_NOT_FOUND) {
                 const errorMsg = krnlError || "Verification workflow failed";
@@ -129,9 +129,9 @@ function VerifyPageContent() {
             }
 
             // Extract transaction hash from workflow result
-            const txHash = (workflowResult as any)?.transactionHash || 
-                           (workflowResult as any)?.hash ||
-                           (workflowResult as any)?.txHash;
+            const txHash = (workflowResult as any)?.transactionHash ||
+                (workflowResult as any)?.hash ||
+                (workflowResult as any)?.txHash;
 
             if (!txHash) {
                 throw new Error("No transaction hash returned from KRNL workflow");
