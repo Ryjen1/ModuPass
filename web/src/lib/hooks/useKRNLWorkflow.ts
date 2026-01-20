@@ -43,10 +43,7 @@ export function useKRNLWorkflow() {
    */
   const runWorkflow = useCallback(
     async (workflowDSL: WorkflowDSL) => {
-      if (!isAuthorized) {
-        toast.error('Account not authorized. Please authorize first.', { id: 'workflow-auth-error' });
-        throw new Error('Account is not authorized. Please authorize first.');
-      }
+
 
       try {
         resetSteps(); // Clear previous workflow state
