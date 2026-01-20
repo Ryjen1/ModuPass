@@ -50,18 +50,17 @@ export default function CreateEventPage() {
   const { data: embeddedBalance } = useBalance({
     address: embeddedWallet?.address as `0x${string}`
   });
-  const { writeContractAsync } = useWriteContract();
   const [txHash, setTxHash] = useState<`0x${string}` | undefined>();
   const { data: receipt, isLoading: isConfirming, isSuccess: isConfirmed, isError: isTxError } = useWaitForTransactionReceipt({
     hash: txHash,
   });
 
   // KRNL Hooks
-  const { 
-    isAuthorized, 
+  const {
+    isAuthorized,
     enableSmartAccount
   } = useKRNL();
-  
+
   const {
     runWorkflow,
     statusCode,
@@ -329,18 +328,18 @@ export default function CreateEventPage() {
       if (!isAuthorized) {
         toast.info("Authorizing KRNL delegated account...");
         console.log("🔐 Starting KRNL authorization...");
-        
+
         if (!enableSmartAccount) {
           throw new Error("KRNL SDK not properly initialized");
         }
-        
+
         const authResult = await enableSmartAccount();
         console.log("✅ Authorization result:", authResult);
-        
+
         if (!authResult) {
           throw new Error("Failed to authorize KRNL delegated account");
         }
-        
+
         toast.success("KRNL account authorized!");
         await new Promise(resolve => setTimeout(resolve, 1000));
       } else {
@@ -356,7 +355,7 @@ export default function CreateEventPage() {
       // Step 3: Create workflow DSL
       toast.info("Preparing KRNL workflow...");
       console.log("📋 Creating workflow DSL...");
-      
+
       const workflowDSL = createEventWorkflowDSL({
         contractAddress: CONTRACT_ADDRESS,
         eventId: finalEventId,
@@ -373,24 +372,24 @@ export default function CreateEventPage() {
 
       // Step 4: Execute workflow using KRNL SDK
       const workflowResult = await runWorkflow(workflowDSL as any);
-      
+
       console.log("📊 Workflow execution result:", workflowResult);
       console.log("📊 Current status code:", statusCode);
 
       // Check workflow status using proper status codes
-      if (statusCode === WorkflowStatusCode.FAILED || 
-          statusCode === WorkflowStatusCode.INVALID ||
-          statusCode === WorkflowStatusCode.WORKFLOW_NOT_FOUND) {
+      if (statusCode === WorkflowStatusCode.FAILED ||
+        statusCode === WorkflowStatusCode.INVALID ||
+        statusCode === WorkflowStatusCode.WORKFLOW_NOT_FOUND) {
         const errorMsg = krnlError || "Workflow execution failed";
         throw new Error(`KRNL workflow failed: ${errorMsg}`);
       }
 
       // For successful workflow, the result should contain transaction information
       // The exact structure depends on KRNL's response format
-      const txHash = (workflowResult as any)?.transactionHash || 
-                     (workflowResult as any)?.hash ||
-                     (workflowResult as any)?.txHash;
-      
+      const txHash = (workflowResult as any)?.transactionHash ||
+        (workflowResult as any)?.hash ||
+        (workflowResult as any)?.txHash;
+
       if (!txHash) {
         console.warn("⚠️ No transaction hash in workflow result, using optimistic approach");
         // For demo purposes, if workflow executed but no hash, consider it pending
