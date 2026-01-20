@@ -61,11 +61,13 @@ export default function CreateEventPage() {
     enableSmartAccount
   } = useKRNL();
 
-  runWorkflow,
+  const {
+    runWorkflow,
     statusCode,
     error: krnlError,
-      resetSteps,
-      currentStep
+    resetSteps,
+    currentStep
+  } = useKRNLWorkflow();
 
   // 2. All State Declarations Second
   const [eventId, setEventId] = useState("");
