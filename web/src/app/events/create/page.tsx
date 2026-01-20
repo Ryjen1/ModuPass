@@ -133,101 +133,12 @@ export default function CreateEventPage() {
 
     // FAILURE CASE
     if (isTxError && !isConfirmed) {
-      console.warn("⚠️ Transaction monitoring warning:", isTxError);
+      console.error("❌ Transaction failed or rejected:", isTxError);
+      toast.error("Transaction failed on-chain or was rejected.");
 
-      const isReverted = receipt?.status === 'reverted';
-
-      if (isReverted) {
-        console.error("❌ Transaction DEFINITELY reverted");
-        toast.error("Transaction failed on-chain.");
-        setTxHash(undefined);
-        setPendingEventData(null);
-        setIsProcessing(false);
-      } else {
-        // Optimistic Success for Demo
-        console.log("⏳ Transaction still pending or RPC timeout. Treating as success for UI.");
-        toast.success("Event submitted!");
-
-        // Helper to trigger the fullscreen success overlay
-        const handleOptimisticSuccess = (hash: string, eventCodes: string[], eventMerkleRoot: string) => {
-          console.log("🚀 Optimistic Success Mode triggered");
-          toast.success("Event created successfully!");
-
-          try {
-            const newEvent = {
-              id: `${eventId}-${Date.now()}`,
-              name: eventName,
-              organizer: address as string,
-              createdAt: Math.floor(Date.now() / 1000),
-              isActive: true,
-              attendeeCount: 0,
-              attendees: [],
-              maxAttendees: parseInt(maxAttendees)
-            };
-
-            const stored = localStorage.getItem("ModuPass_LocalEvents");
-            const events = stored ? JSON.parse(stored) : [];
-            events.unshift(newEvent);
-            localStorage.setItem("ModuPass_LocalEvents", JSON.stringify(events));
-            console.log("💾 Saved event to local Demo storage");
-          } catch (e) {
-            console.error("Failed to save local event", e);
-          }
-
-          setCreatedEvent({
-            eventId: `${eventId}-${Date.now()}`,
-            eventName,
-            codes: eventCodes,
-            merkleRoot: eventMerkleRoot,
-            txHash: hash
-          });
-
-          setIsProcessing(false);
-          setEventId("");
-          setEventName("");
-          setDescription("");
-          setMaxAttendees("100");
-          setPendingEventData(null);
-        };
-
-        setCreatedEvent({
-          ...pendingEventData,
-          txHash: txHash
-        });
-
-        // Actually handleOptimisticSuccess call is needed here if we rely on it, 
-        // but setCreatedEvent above might be enough if state is consistent.
-        // Let's call the helper logic manually or rely on the function hoisting?
-        // Wait, handleOptimisticSuccess is defined inside the IF block in previous code.
-        // I need to make sure handleOptimisticSuccess is accessible.
-        // It was defined inside the Effect in previous version.
-        // Let's just define the logic inline to avoid scope issues.
-
-        // ... (Optimistic Logic Duplicated inline for safety) ...
-        // Actually, let's keep it simple. setCreatedEvent triggers the overlay.
-        // Local storage saving is the extra part.
-
-        try {
-          const newEvent = {
-            id: `${eventId}-${Date.now()}`,
-            name: pendingEventData.eventName, // Use pending data
-            organizer: address as string,
-            createdAt: Math.floor(Date.now() / 1000),
-            isActive: true,
-            attendeeCount: 0,
-            attendees: [],
-            maxAttendees: 100 // fallback
-          };
-          const stored = localStorage.getItem("ModuPass_LocalEvents");
-          const events = stored ? JSON.parse(stored) : [];
-          events.unshift(newEvent);
-          localStorage.setItem("ModuPass_LocalEvents", JSON.stringify(events));
-        } catch (e) { }
-
-        setTxHash(undefined);
-        setPendingEventData(null);
-        setIsProcessing(false);
-      }
+      setTxHash(undefined);
+      setPendingEventData(null);
+      setIsProcessing(false);
     }
   }, [isConfirmed, isTxError, receipt, txHash, pendingEventData]);
 
@@ -276,44 +187,7 @@ export default function CreateEventPage() {
     let codes: string[] = [];
     let merkleRoot = "";
 
-    // Define helper to ensure accessibility
-    const triggerOptimisticSuccess = (hash: string, c: string[], m: string) => {
-      console.log("🚀 Triggering Optimistic Success UI");
 
-      // Save to local storage
-      try {
-        const newEvent = {
-          id: `${eventId}-${Date.now()}`, // Consistent ID strategy needed
-          name: eventName,
-          organizer: address as string,
-          createdAt: Math.floor(Date.now() / 1000),
-          isActive: true,
-          attendeeCount: 0,
-          attendees: [],
-          maxAttendees: maxAttendeesNum
-        };
-        const stored = localStorage.getItem("ModuPass_LocalEvents");
-        const events = stored ? JSON.parse(stored) : [];
-        events.unshift(newEvent);
-        localStorage.setItem("ModuPass_LocalEvents", JSON.stringify(events));
-      } catch (e) { }
-
-      setCreatedEvent({
-        eventId: finalEventId,
-        eventName,
-        codes: c,
-        merkleRoot: m,
-        txHash: hash
-      });
-
-      setTxHash(undefined);
-      setPendingEventData(null);
-      setIsProcessing(false);
-      setEventId("");
-      setEventName("");
-      setDescription("");
-      setMaxAttendees("100");
-    };
 
     try {
       // Step 0: Validate KRNL configuration
@@ -392,11 +266,8 @@ export default function CreateEventPage() {
         (workflowResult as any)?.txHash;
 
       if (!txHash) {
-        console.warn("⚠️ No transaction hash in workflow result, using optimistic approach");
-        // For demo purposes, if workflow executed but no hash, consider it pending
-        toast.warning("Workflow submitted, transaction pending confirmation");
-        triggerOptimisticSuccess("pending", codes, merkleRoot);
-        return;
+        console.error("❌ No transaction hash returned from KRNL");
+        throw new Error("KRNL workflow executed but returned no transaction hash.");
       }
 
       console.log("✅ Workflow executed successfully. Transaction:", txHash);
@@ -410,7 +281,22 @@ export default function CreateEventPage() {
       }
 
       console.log("✅ Transaction confirmed:", receipt.transactionHash);
-      triggerOptimisticSuccess(txHash, codes, merkleRoot);
+
+      setCreatedEvent({
+        eventId: finalEventId,
+        eventName,
+        codes,
+        merkleRoot,
+        txHash
+      });
+
+      setTxHash(undefined);
+      setPendingEventData(null);
+      setIsProcessing(false);
+      setEventId("");
+      setEventName("");
+      setDescription("");
+      setMaxAttendees("100");
 
     } catch (error: any) {
       console.error("Error creating event:", error);
