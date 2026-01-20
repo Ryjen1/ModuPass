@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
     config.externals.push('pino-pretty', 'lokijs', 'encoding', 'thread-stream');
     return config;
   },
+  async rewrites() {
+    return [
+      {
+        source: "/api/krnl-node/:path*",
+        destination: "https://v0-1-0.node.lat/:path*",
+      },
+    ];
+  },
 };
 
 export default nextConfig;

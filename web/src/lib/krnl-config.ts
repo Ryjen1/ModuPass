@@ -26,7 +26,7 @@ export const krnlConfig = createConfig({
   chain: sepolia,
   delegatedContractAddress: delegatedAddress as `0x${string}`,
   privyAppId: privyAppId as string,
-  krnlNodeUrl: 'https://v0-1-0.node.lat/', // KRNL Protocol node endpoint
+  krnlNodeUrl: '/api/krnl-node/', // Proxy to bypass CORS
   // rpcUrl is optional – uses KRNL-optimized Privy RPC if not provided
 });
 
