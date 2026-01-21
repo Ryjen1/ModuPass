@@ -12,6 +12,9 @@
   "author": "",
   "license": "ISC",
   "type": "commonjs",
+  "dependencies": {
+    "@krnl/sdk": "^1.0.0"
+  },
   "devDependencies": {
     "@types/node": "^24.10.1",
     "ts-node": "^10.9.2",

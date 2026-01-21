@@ -32,8 +32,8 @@ export interface KRNLWorkflowResult {
  */
 export interface KRNLClientConfig {
   workflowId: string;
-  apiKey?: string;
-  apiEndpoint?: string;
+  apiKey: string;
+  apiEndpoint: string;
 }
 
 /**
@@ -44,9 +44,11 @@ export interface KRNLClientConfig {
  */
 export class KRNLClient {
   private config: KRNLClientConfig;
-  private nonceCounter: number = 0;
 
   constructor(config: KRNLClientConfig) {
+    if (!config.apiKey || !config.apiEndpoint) {
+      throw new Error("KRNL API key and endpoint are required for real KRNL integration");
+    }
     this.config = config;
   }
 
@@ -58,27 +60,8 @@ export class KRNLClient {
    */
   async executeWorkflow(input: KRNLWorkflowInput): Promise<KRNLWorkflowResult> {
     try {
-      // Check if we should use real KRNL API or mock mode
-      const useRealAPI = this.config.apiEndpoint && this.config.apiKey;
-
-      if (useRealAPI) {
-        // Production: Call real KRNL Studio API
-        return await this.executeRealKRNLWorkflow(input);
-      } else {
-        // Development/Testing: Simulate KRNL workflow execution
-        console.log('[KRNL Client] Running in MOCK mode - using simulated workflow');
-        const authData = await this.simulateKRNLWorkflow(input);
-
-        return {
-          success: true,
-          authData,
-          metadata: {
-            processedAt: new Date().toISOString(),
-            workflowId: this.config.workflowId,
-            mode: 'mock',
-          },
-        };
-      }
+      // Production: Call real KRNL API
+      return await this.executeRealKRNLWorkflow(input);
     } catch (error) {
       return {
         success: false,
@@ -139,73 +122,33 @@ export class KRNLClient {
     };
   }
 
-  /**
-   * Simulate KRNL workflow execution
-   * This generates valid AuthData that matches the smart contract expectations
-   * 
-   * In production, KRNL Studio would:
-   * 1. Run eligibility checks
-   * 2. Generate cryptographic proof
-   * 3. Sign the result
-   * 4. Return AuthData
-   */
-  private async simulateKRNLWorkflow(
-    input: KRNLWorkflowInput
-  ): Promise<KRNLAuthData> {
-    // Generate unique nonce
-    const nonce = ++this.nonceCounter + Date.now();
-
-    // Current timestamp
-    const timestamp = Math.floor(Date.now() / 1000);
-
-    // Generate workflow ID hash
-    const workflowId = this.hashString(this.config.workflowId);
-
-    // Generate receipt hash (deterministic based on input)
-    const receipt = {
-      version: "1.0.0",
-      eventId: input.eventId,
-      attendeeAddress: input.attendeeAddress.toLowerCase(),
-      claimData: input.claimData || {},
-      timestamp,
-      workflowId: this.config.workflowId,
-      nonce,
-    };
-    const receiptHash = this.hashObject(receipt);
-
-    // In production, KRNL would generate a cryptographic signature
-    // For MVP, we use empty signature (contract doesn't verify it yet)
-    const signature = "0x";
-
-    return {
-      user: input.attendeeAddress,
-      nonce,
-      timestamp,
-      workflowId,
-      receiptHash,
-      signature,
-    };
-  }
 
   /**
    * Verify KRNL proof
-   * In production, this would verify the cryptographic signature
+   * Calls KRNL API to verify the proof
    */
   async verifyProof(authData: KRNLAuthData): Promise<boolean> {
-    // Basic validation
-    if (!authData.user || !authData.workflowId || !authData.receiptHash) {
+    try {
+      const response = await fetch(`${this.config.apiEndpoint}/workflows/${this.config.workflowId}/verify`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.config.apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(authData),
+      });
+
+      if (!response.ok) {
+        console.error(`KRNL verification failed: ${response.status}`);
+        return false;
+      }
+
+      const result = await response.json();
+      return result.valid === true;
+    } catch (error) {
+      console.error('Error verifying proof:', error);
       return false;
     }
-
-    // Check timestamp is recent (within 1 hour)
-    const now = Math.floor(Date.now() / 1000);
-    if (now > authData.timestamp + 3600) {
-      return false;
-    }
-
-    // In production, verify cryptographic signature
-    // For MVP, we accept all valid-looking data
-    return true;
   }
 
   /**
