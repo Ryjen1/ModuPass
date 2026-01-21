@@ -9,6 +9,10 @@ export const KERNEL_CONFIG = {
   // Receipt version
   RECEIPT_VERSION: "1.0.0",
 
+  // KRNL API configuration
+  KRNL_API_ENDPOINT: process.env.KRNL_API_ENDPOINT || "https://api.krnl.xyz",
+  KRNL_API_KEY: process.env.KRNL_API_KEY,
+
   // Validation rules
   MAX_EVENT_ID_LENGTH: 100,
   MAX_CLAIM_DATA_SIZE: 10000, // bytes

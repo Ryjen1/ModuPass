@@ -4,6 +4,7 @@
  */
 
 import { createHash } from "crypto";
+import { getKernelConfig } from "./config";
 
 export interface KRNLWorkflowInput {
   eventId: string;
@@ -45,11 +46,17 @@ export interface KRNLClientConfig {
 export class KRNLClient {
   private config: KRNLClientConfig;
 
-  constructor(config: KRNLClientConfig) {
-    if (!config.apiKey || !config.apiEndpoint) {
-      throw new Error("KRNL API key and endpoint are required for real KRNL integration");
+  constructor(config?: Partial<KRNLClientConfig>) {
+    const kernelConfig = getKernelConfig();
+    this.config = {
+      workflowId: config?.workflowId || "modupass-workflow",
+      apiKey: config?.apiKey || kernelConfig.KRNL_API_KEY,
+      apiEndpoint: config?.apiEndpoint || kernelConfig.KRNL_API_ENDPOINT,
+    };
+
+    if (!this.config.apiKey || !this.config.apiEndpoint) {
+      throw new Error("KRNL API key and endpoint are required. Set KRNL_API_KEY and KRNL_API_ENDPOINT environment variables.");
     }
-    this.config = config;
   }
 
   /**
@@ -180,6 +187,6 @@ export class KRNLClient {
 /**
  * Create a KRNL client instance
  */
-export function createKRNLClient(config: KRNLClientConfig): KRNLClient {
+export function createKRNLClient(config?: Partial<KRNLClientConfig>): KRNLClient {
   return new KRNLClient(config);
 }
