@@ -16,7 +16,6 @@ import { Calendar, Loader2, CheckCircle2, AlertCircle, Download, QrCode } from "
 import { toast } from "sonner";
 import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
-import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
 import { validateWorkflowConfig } from "@/lib/krnl-workflows";
 import { createEventWorkflowDSL } from "@/lib/krnl-workflows-dsl";
 import { useKRNLWorkflow } from "@/lib/hooks";
