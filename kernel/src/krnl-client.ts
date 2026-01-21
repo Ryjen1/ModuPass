@@ -55,7 +55,8 @@ export class KRNLClient {
     };
 
     if (!this.config.apiKey || !this.config.apiEndpoint) {
-      throw new Error("KRNL API key and endpoint are required. Set KRNL_API_KEY and KRNL_API_ENDPOINT environment variables.");
+      console.warn("⚠️  KRNL API credentials not found. Running in DEVELOPMENT mode with mock responses.");
+      console.warn("Set KRNL_API_KEY and KRNL_API_ENDPOINT environment variables for production.");
     }
   }
 
@@ -67,8 +68,25 @@ export class KRNLClient {
    */
   async executeWorkflow(input: KRNLWorkflowInput): Promise<KRNLWorkflowResult> {
     try {
-      // Production: Call real KRNL API
-      return await this.executeRealKRNLWorkflow(input);
+      // Check if we have real API credentials
+      if (this.config.apiKey && this.config.apiEndpoint) {
+        // Production: Call real KRNL API
+        return await this.executeRealKRNLWorkflow(input);
+      } else {
+        // Development: Fall back to mock for localhost testing
+        console.log('[KRNL Client] Running in DEVELOPMENT mode - using mock responses');
+        const authData = await this.simulateKRNLWorkflow(input);
+
+        return {
+          success: true,
+          authData,
+          metadata: {
+            processedAt: new Date().toISOString(),
+            workflowId: this.config.workflowId,
+            mode: 'development-mock',
+          },
+        };
+      }
     } catch (error) {
       return {
         success: false,
@@ -131,30 +149,86 @@ export class KRNLClient {
 
 
   /**
+   * Simulate KRNL workflow execution (for development only)
+   */
+  private async simulateKRNLWorkflow(
+    input: KRNLWorkflowInput
+  ): Promise<KRNLAuthData> {
+    // Generate unique nonce
+    const nonce = Date.now();
+
+    // Current timestamp
+    const timestamp = Math.floor(Date.now() / 1000);
+
+    // Generate workflow ID hash
+    const workflowId = this.hashString(this.config.workflowId);
+
+    // Generate receipt hash (deterministic based on input)
+    const receipt = {
+      version: "1.0.0",
+      eventId: input.eventId,
+      attendeeAddress: input.attendeeAddress.toLowerCase(),
+      claimData: input.claimData || {},
+      timestamp,
+      workflowId: this.config.workflowId,
+      nonce,
+    };
+    const receiptHash = this.hashObject(receipt);
+
+    // In production, KRNL would generate a cryptographic signature
+    // For development, we use empty signature
+    const signature = "0x";
+
+    return {
+      user: input.attendeeAddress,
+      nonce,
+      timestamp,
+      workflowId,
+      receiptHash,
+      signature,
+    };
+  }
+
+  /**
    * Verify KRNL proof
-   * Calls KRNL API to verify the proof
+   * Calls KRNL API to verify the proof, or uses mock verification in development
    */
   async verifyProof(authData: KRNLAuthData): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.config.apiEndpoint}/workflows/${this.config.workflowId}/verify`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${this.config.apiKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(authData),
-      });
+    if (this.config.apiKey && this.config.apiEndpoint) {
+      try {
+        const response = await fetch(`${this.config.apiEndpoint}/workflows/${this.config.workflowId}/verify`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${this.config.apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(authData),
+        });
 
-      if (!response.ok) {
-        console.error(`KRNL verification failed: ${response.status}`);
+        if (!response.ok) {
+          console.error(`KRNL verification failed: ${response.status}`);
+          return false;
+        }
+
+        const result = await response.json();
+        return result.valid === true;
+      } catch (error) {
+        console.error('Error verifying proof:', error);
+        return false;
+      }
+    } else {
+      // Development mode: basic validation
+      if (!authData.user || !authData.workflowId || !authData.receiptHash) {
         return false;
       }
 
-      const result = await response.json();
-      return result.valid === true;
-    } catch (error) {
-      console.error('Error verifying proof:', error);
-      return false;
+      // Check timestamp is recent (within 1 hour)
+      const now = Math.floor(Date.now() / 1000);
+      if (now > authData.timestamp + 3600) {
+        return false;
+      }
+
+      return true;
     }
   }
 
