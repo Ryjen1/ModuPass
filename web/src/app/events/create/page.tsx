@@ -6,7 +6,7 @@ import { useAccount, useWriteContract, useBalance, useConfig, useWaitForTransact
 import { waitForTransactionReceipt } from "wagmi/actions";
 import { formatEther } from "viem";
 import { usePrivy, useWallets } from "@privy-io/react-auth";
-import { useKRNL, WorkflowStatusCode } from '@krnl-dev/sdk-react-7702';
+import { useKRNLWorkflow, WorkflowStatus } from '@krnl/sdk';
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -54,18 +54,12 @@ export default function CreateEventPage() {
     hash: txHash,
   });
 
-  // KRNL Hooks
+  // KRNL Workflow Hook
   const {
-    isAuthorized,
-    enableSmartAccount
-  } = useKRNL();
-
-  const {
-    runWorkflow,
-    statusCode,
+    executeWorkflow,
+    status,
     error: krnlError,
-    resetSteps,
-    currentStep
+    reset
   } = useKRNLWorkflow();
 
   // 2. All State Declarations Second
@@ -95,14 +89,13 @@ export default function CreateEventPage() {
   useEffect(() => {
     if (!mounted) return;
     console.log("🔧 ModuPass KRNL Integration Status:", {
-      isAuthorized,
       isConnected,
       address,
       embeddedWallet: embeddedWallet?.address,
-      statusCode,
-      currentStep
+      status,
+      krnlError
     });
-  }, [mounted, isAuthorized, isConnected, address, embeddedWallet, statusCode, currentStep]);
+  }, [mounted, isConnected, address, embeddedWallet, status, krnlError]);
 
   // Monitor transaction status
   useEffect(() => {
@@ -198,27 +191,9 @@ export default function CreateEventPage() {
         );
       }
 
-      // Step 1: KRNL Authorization
-      if (!isAuthorized) {
-        toast.info("Authorizing KRNL delegated account...");
-        console.log("🔐 Starting KRNL authorization...");
-
-        if (!enableSmartAccount) {
-          throw new Error("KRNL SDK not properly initialized");
-        }
-
-        const authResult = await enableSmartAccount();
-        console.log("✅ Authorization result:", authResult);
-
-        if (!authResult) {
-          throw new Error("Failed to authorize KRNL delegated account");
-        }
-
-        toast.success("KRNL account authorized!");
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      } else {
-        console.log("✓ Account already authorized for KRNL");
-      }
+      // Step 1: KRNL Authorization Check
+      // The official SDK handles authorization automatically
+      console.log("✓ Using official KRNL SDK - no manual authorization needed");
 
       // Step 2: Generate verification codes
       toast.info("Generating verification codes...");
@@ -239,30 +214,25 @@ export default function CreateEventPage() {
       });
 
       console.log("🚀 Executing KRNL workflow:", workflowDSL);
-      toast.info("Executing workflow through KRNL Protocol...");
+      toast.info("Executing workflow through official KRNL SDK...");
 
-      // Reset workflow steps before execution
-      resetSteps();
+      // Reset workflow state before execution
+      reset();
 
-      // Step 4: Execute workflow using KRNL SDK
-      const workflowResult = await runWorkflow(workflowDSL as any);
+      // Step 4: Execute workflow using official KRNL SDK
+      const workflowResult = await executeWorkflow(workflowDSL);
 
       console.log("📊 Workflow execution result:", workflowResult);
-      console.log("📊 Current status code:", statusCode);
+      console.log("📊 Current status:", status);
 
-      // Check workflow status using proper status codes
-      if (statusCode === WorkflowStatusCode.FAILED ||
-        statusCode === WorkflowStatusCode.INVALID ||
-        statusCode === WorkflowStatusCode.WORKFLOW_NOT_FOUND) {
+      // Check workflow status
+      if (status === WorkflowStatus.FAILED || status === WorkflowStatus.ERROR) {
         const errorMsg = krnlError || "Workflow execution failed";
         throw new Error(`KRNL workflow failed: ${errorMsg}`);
       }
 
-      // For successful workflow, the result should contain transaction information
-      // The exact structure depends on KRNL's response format
-      const txHash = (workflowResult as any)?.transactionHash ||
-        (workflowResult as any)?.hash ||
-        (workflowResult as any)?.txHash;
+      // For successful workflow, extract transaction hash
+      const txHash = workflowResult?.transactionHash || workflowResult?.hash;
 
       if (!txHash) {
         console.error("❌ No transaction hash returned from KRNL");

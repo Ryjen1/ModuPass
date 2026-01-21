@@ -6,7 +6,7 @@ import { WagmiProvider, createConfig } from '@privy-io/wagmi';
 import { sepolia } from 'wagmi/chains';
 import { http } from 'wagmi';
 import { PrivyProvider } from '@privy-io/react-auth';
-import { KRNLProvider } from '@krnl-dev/sdk-react-7702';
+import { KRNLProvider } from '@krnl/sdk';
 import { krnlConfig } from '@/lib/krnl-config';
 
 // Wagmi Config
@@ -61,7 +61,7 @@ export function Web3Provider({ children }: { children: ReactNode }) {
     >
       <QueryClientProvider client={queryClient}>
         <WagmiProvider config={wagmiConfig}>
-          <KRNLProvider config={krnlConfig}>
+          <KRNLProvider {...krnlConfig}>
             {children}
             {hasError && (
               <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
