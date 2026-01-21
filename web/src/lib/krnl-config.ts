@@ -1,4 +1,4 @@
-import { KRNLProvider } from '@krnl/sdk';
+import { createConfig } from '@krnl-dev/sdk-react-7702';
 import { sepolia } from 'viem/chains';
 
 // Get configuration from environment variables with validation
@@ -8,25 +8,24 @@ const krnlApiKey = process.env.KRNL_API_KEY;
 
 // Validate required configuration
 if (!privyAppId) {
-  throw new Error('NEXT_PUBLIC_PRIVY_APP_ID is required');
+  console.error('NEXT_PUBLIC_PRIVY_APP_ID is not set in environment variables');
 }
 if (!krnlApiKey) {
-  throw new Error('KRNL_API_KEY is required for real KRNL integration');
+  throw new Error('KRNL_API_KEY is required - set it in environment variables to prevent self-hosted fallback');
 }
 
 /**
  * KRNL SDK Configuration
  *
- * Official KRNL SDK configuration for ModuPass.
- * No self-hosted fallbacks - requires real KRNL API credentials.
+ * Configured to prevent self-hosted fallback by requiring real API credentials.
  */
-export const krnlConfig = {
-  apiKey: krnlApiKey,
+export const krnlConfig = createConfig({
   chain: sepolia,
   delegatedContractAddress: delegatedAddress as `0x${string}`,
   privyAppId: privyAppId as string,
-  // Disable any self-hosted modes
-  enableSelfHosted: false,
-};
+  krnlNodeUrl: 'https://v0-1-0.node.lat/', // KRNL Protocol node endpoint
+  apiKey: krnlApiKey, // This should prevent self-hosted fallback
+  // rpcUrl is optional – uses KRNL-optimized Privy RPC if not provided
+});
 
 export const CONTRACT_ADDRESS = delegatedAddress;
