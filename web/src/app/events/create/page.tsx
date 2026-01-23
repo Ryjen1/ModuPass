@@ -185,6 +185,8 @@ export default function CreateEventPage() {
         toast.success("Event created successfully!");
       }
 
+      // Note: Event is now saved to both blockchain and database for dashboard visibility
+
       // Reset form
       setEventId("");
       setEventName("");
