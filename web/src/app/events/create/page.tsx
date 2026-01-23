@@ -38,6 +38,31 @@ export default function CreateEventPage() {
   const [createdEvent, setCreatedEvent] = useState<CreatedEventData | null>(null);
   const [showQRCodes, setShowQRCodes] = useState(false);
 
+  const saveEventToDatabase = async (
+    eventId: string,
+    eventName: string,
+    description: string,
+    address: string,
+    maxAttendeesNum: number,
+    merkleRoot: string,
+    location: string
+  ) => {
+    const { error } = await supabase
+      .from("events")
+      .insert({
+        id: eventId,
+        name: eventName,
+        description: description || null,
+        organizer_address: address,
+        max_attendees: maxAttendeesNum,
+        codes_merkle_root: merkleRoot,
+        location: location || null,
+        is_active: true,
+      });
+
+    return error;
+  };
+
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -123,18 +148,15 @@ export default function CreateEventPage() {
       });
 
       // Save to Supabase for dashboard visibility
-      const { error: dbError } = await supabase
-        .from("events")
-        .insert({
-          id: eventId,
-          name: eventName,
-          description: description || null,
-          organizer_address: address,
-          max_attendees: maxAttendeesNum,
-          codes_merkle_root: merkleRoot,
-          location: location || null,
-          is_active: true,
-        });
+      const dbError = await saveEventToDatabase(
+        eventId,
+        eventName,
+        description,
+        address!,
+        maxAttendeesNum,
+        merkleRoot,
+        location
+      );
 
       if (dbError) {
         console.error("Failed to save event to database:", dbError);
