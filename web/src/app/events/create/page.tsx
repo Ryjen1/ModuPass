@@ -35,6 +35,7 @@ export default function CreateEventPage() {
   const [maxAttendees, setMaxAttendees] = useState("100");
   const [location, setLocation] = useState("");
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isSavingToDb, setIsSavingToDb] = useState(false);
   const [createdEvent, setCreatedEvent] = useState<CreatedEventData | null>(null);
   const [showQRCodes, setShowQRCodes] = useState(false);
 
@@ -159,6 +160,8 @@ export default function CreateEventPage() {
       });
 
       // Save to Supabase for dashboard visibility
+      console.log("Saving event to database:", { eventId, eventName, address });
+      setIsSavingToDb(true);
       const dbError = await saveEventToDatabase(
         eventId,
         eventName,
@@ -168,6 +171,8 @@ export default function CreateEventPage() {
         merkleRoot,
         location
       );
+      setIsSavingToDb(false);
+      console.log("Database save result:", dbError ? "Error" : "Success");
 
       if (dbError) {
         console.error("Failed to save event to database:", dbError);
