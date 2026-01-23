@@ -47,6 +47,17 @@ export default function CreateEventPage() {
     merkleRoot: string,
     location: string
   ) => {
+    // Check if event already exists
+    const { data: existingEvent } = await supabase
+      .from("events")
+      .select("id")
+      .eq("id", eventId)
+      .single();
+
+    if (existingEvent) {
+      return new Error("Event with this ID already exists");
+    }
+
     const { error } = await supabase
       .from("events")
       .insert({
@@ -160,7 +171,11 @@ export default function CreateEventPage() {
 
       if (dbError) {
         console.error("Failed to save event to database:", dbError);
-        toast.error("Event created on blockchain but failed to save to dashboard. Please refresh and try again.");
+        if (dbError instanceof Error && dbError.message === "Event with this ID already exists") {
+          toast.error("Event ID already exists. Please choose a different ID.");
+        } else {
+          toast.error("Event created on blockchain but failed to save to dashboard. Please refresh and try again.");
+        }
       } else {
         toast.success("Event created successfully!");
       }
