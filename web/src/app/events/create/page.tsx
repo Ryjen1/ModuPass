@@ -99,6 +99,42 @@ export default function CreateEventPage() {
     }
   };
 
+  const saveEventToDatabase = async (
+    eventId: string,
+    eventName: string,
+    description: string,
+    address: string,
+    maxAttendeesNum: number,
+    merkleRoot: string,
+    location: string
+  ) => {
+    // Check if event already exists
+    const { data: existingEvent } = await supabase
+      .from("events")
+      .select("id")
+      .eq("id", eventId)
+      .single();
+
+    if (existingEvent) {
+      return new Error("Event with this ID already exists");
+    }
+
+    const { error } = await supabase
+      .from("events")
+      .insert({
+        id: eventId,
+        name: eventName,
+        description: description || null,
+        organizer_address: address,
+        max_attendees: maxAttendeesNum,
+        codes_merkle_root: merkleRoot,
+        location: location || null,
+        is_active: true,
+      });
+
+    return error;
+  };
+
   const handleCreateEvent = async (e: React.FormEvent) => {
     e.preventDefault();
 
