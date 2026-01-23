@@ -13,12 +13,19 @@ import "@openzeppelin/contracts/utils/cryptography/MessageHashUtils.sol";
 abstract contract TargetBase is Ownable {
     using ECDSA for bytes32;
 
+    // Execution struct for KRNL workflow steps
+    struct Execution {
+        bytes32 id;
+        bytes data;
+        bytes result;
+    }
+
     // AuthData struct for KRNL authorization
     struct AuthData {
         uint256 nonce;
         uint256 expiry;
         bytes32 id;
-        bytes32[] executions;
+        Execution[] executions;
         bytes result;
         bool sponsorExecutionFee;
         bytes signature;
