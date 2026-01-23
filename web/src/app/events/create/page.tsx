@@ -13,6 +13,7 @@ import { toast } from "sonner";
 import { generateVerificationCodes } from "@/lib/services/code-generator";
 import { QRCodeCanvas } from "qrcode.react";
 import ModuPassTargetBase from "@/lib/ModuPassTargetBase.json";
+import { supabase } from "@/lib/supabase";
 
 const CONTRACT_ADDRESS = process.env.NEXT_PUBLIC_CONTRACT_ADDRESS || "";
 
@@ -121,7 +122,26 @@ export default function CreateEventPage() {
         txHash
       });
 
-      toast.success("Event created successfully!");
+      // Save to Supabase for dashboard visibility
+      const { error: dbError } = await supabase
+        .from("events")
+        .insert({
+          id: eventId,
+          name: eventName,
+          description: description || null,
+          organizer_address: address,
+          max_attendees: maxAttendeesNum,
+          codes_merkle_root: merkleRoot,
+          location: location || null,
+          is_active: true,
+        });
+
+      if (dbError) {
+        console.error("Failed to save event to database:", dbError);
+        toast.error("Event created on blockchain but failed to save to dashboard. Please refresh and try again.");
+      } else {
+        toast.success("Event created successfully!");
+      }
 
       // Reset form
       setEventId("");
