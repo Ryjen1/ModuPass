@@ -2,13 +2,14 @@
 pragma solidity ^0.8.20;
 
 import "./TargetBase.sol";
+import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 
 /**
  * @title ModuPassTargetBase
- * @notice Event attendance verification system using KRNL's TargetBase authorization
- * @dev Extends TargetBase to provide secure, verifiable proof of attendance for events
+ * @notice Event attendance verification system using KRNL's TargetBase authorization with NFT passes
+ * @dev Extends TargetBase and ERC721 to provide secure, verifiable proof of attendance as NFTs
  */
-contract ModuPassTargetBase is TargetBase {
+contract ModuPassTargetBase is TargetBase, ERC721 {
     // Structs
     struct Event {
         string eventId;
@@ -37,6 +38,12 @@ contract ModuPassTargetBase is TargetBase {
     string[] private eventIds;
     uint256 private totalEvents;
 
+    uint256 private _nextTokenId = 1;
+    mapping(uint256 => string) public tokenToEventId;
+    mapping(uint256 => address) public tokenToAttendee;
+    mapping(uint256 => uint256) public tokenToTimestamp;
+    string private _baseTokenURI;
+
     // Events
     event EventCreated(
         string indexed eventId,
@@ -48,6 +55,13 @@ contract ModuPassTargetBase is TargetBase {
     );
     
     event AttendanceVerified(
+        string indexed eventId,
+        address indexed attendee,
+        uint256 timestamp
+    );
+
+    event PassMinted(
+        uint256 indexed tokenId,
         string indexed eventId,
         address indexed attendee,
         uint256 timestamp
@@ -65,7 +79,7 @@ contract ModuPassTargetBase is TargetBase {
         address _masterKey,
         address _recoveryKey,
         bytes32 _delegatedAccountCodeHash
-    ) TargetBase(_masterKey, _recoveryKey, _delegatedAccountCodeHash) {}
+    ) TargetBase(_masterKey, _recoveryKey, _delegatedAccountCodeHash) ERC721("ModuPass", "MPASS") {}
 
     /**
      * @notice Create a new event (KRNL-authorized)
@@ -145,6 +159,15 @@ contract ModuPassTargetBase is TargetBase {
         attendeeCounts[data.eventId]++;
 
         emit AttendanceVerified(data.eventId, data.attendee, data.timestamp);
+
+        // Mint NFT pass
+        uint256 tokenId = _nextTokenId++;
+        _mint(data.attendee, tokenId);
+        tokenToEventId[tokenId] = data.eventId;
+        tokenToAttendee[tokenId] = data.attendee;
+        tokenToTimestamp[tokenId] = data.timestamp;
+
+        emit PassMinted(tokenId, data.eventId, data.attendee, data.timestamp);
     }
 
     /**
@@ -213,7 +236,19 @@ contract ModuPassTargetBase is TargetBase {
         Event storage eventData = events[eventId];
         require(bytes(eventData.eventId).length > 0, "Event not found");
         require(msg.sender == eventData.organizer, "Only organizer can toggle status");
-        
+
         eventData.isActive = !eventData.isActive;
+    }
+
+    function _baseURI() internal view override returns (string memory) {
+        return _baseTokenURI;
+    }
+
+    function setBaseURI(string memory baseURI) external {
+        _baseTokenURI = baseURI;
+    }
+
+    function getTokenDetails(uint256 tokenId) external view returns (string memory eventId, address attendee, uint256 timestamp) {
+        return (tokenToEventId[tokenId], tokenToAttendee[tokenId], tokenToTimestamp[tokenId]);
     }
 }
