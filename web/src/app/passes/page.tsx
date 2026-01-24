@@ -5,10 +5,13 @@ import Navigation from "@/components/Navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Shield, Download, ExternalLink, Loader2, Wallet as WalletIcon } from "lucide-react";
-import { useAccount } from "wagmi";
+import { Input } from "@/components/ui/input";
+import { Shield, Download, ExternalLink, Loader2, Wallet as WalletIcon, Share, RefreshCw } from "lucide-react";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
 import Link from "next/link";
+import { publicClient, CONTRACT_ADDRESS } from '@/lib/viem-client';
+import abi from '@/lib/ModuPassTargetBase.json';
 
 interface Pass {
   eventId: string;
@@ -22,18 +25,103 @@ export default function MyPasses() {
   const [mounted, setMounted] = useState(false);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [loading, setLoading] = useState(false);
+  const [transferTo, setTransferTo] = useState('');
+  const [transferTokenId, setTransferTokenId] = useState('');
+
+  const { writeContract, isPending } = useWriteContract();
+  const { isLoading: isConfirming } = useWaitForTransactionReceipt();
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    if (mounted && isConnected && address) {
-      // For now, we'll show a placeholder
-      // In a full implementation, you'd query the blockchain for NFTs owned by this address
+  const fetchPasses = async () => {
+    setLoading(true);
+    try {
+      const tokenIds = await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi,
+        functionName: 'getTokensByOwner',
+        args: [address]
+      }) as bigint[];
+
+      const passesData: Pass[] = [];
+      for (const tokenId of tokenIds) {
+        const details = await publicClient.readContract({
+          address: CONTRACT_ADDRESS,
+          abi,
+          functionName: 'getTokenDetails',
+          args: [tokenId]
+        }) as [string, `0x${string}`, bigint];
+
+        const eventData = await publicClient.readContract({
+          address: CONTRACT_ADDRESS,
+          abi,
+          functionName: 'getEvent',
+          args: [details[0]]
+        }) as any; // Assuming Event struct
+
+        passesData.push({
+          eventId: details[0],
+          eventName: eventData.eventName,
+          tokenId: tokenId.toString(),
+          timestamp: new Date(Number(details[2]) * 1000).toISOString()
+        });
+      }
+      setPasses(passesData);
+    } catch (error) {
+      console.error('Error fetching passes:', error);
+      toast.error('Failed to load passes');
+    } finally {
       setLoading(false);
     }
+  };
+
+  useEffect(() => {
+    if (mounted && isConnected && address) {
+      fetchPasses();
+    }
   }, [mounted, isConnected, address]);
+
+  const handleTransfer = async (tokenId: string) => {
+    if (!transferTo) {
+      toast.error('Please enter recipient address');
+      return;
+    }
+    try {
+      writeContract({
+        address: CONTRACT_ADDRESS,
+        abi,
+        functionName: 'transferPass',
+        args: [transferTo as `0x${string}`, BigInt(tokenId)]
+      });
+      toast.success('Transfer initiated');
+      setTransferTo('');
+      setTransferTokenId('');
+      // Refresh passes after transfer
+      setTimeout(() => fetchPasses(), 2000);
+    } catch (error) {
+      toast.error('Transfer failed');
+    }
+  };
+
+  const handleDownload = async (tokenId: string) => {
+    try {
+      const uri = await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi,
+        functionName: 'tokenURI',
+        args: [BigInt(tokenId)]
+      }) as string;
+      const link = document.createElement('a');
+      link.href = uri;
+      link.download = `pass-${tokenId}.json`;
+      link.click();
+      toast.success('Metadata downloaded');
+    } catch (error) {
+      toast.error('Download failed');
+    }
+  };
 
   if (!mounted || !isConnected) {
     return (
@@ -41,9 +129,15 @@ export default function MyPasses() {
         <Navigation />
         <main className="container mx-auto px-4 py-12">
           <div className="max-w-5xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              My <span className="bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">Passes</span>
-            </h1>
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-4xl md:text-5xl font-bold">
+                My <span className="bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">Passes</span>
+              </h1>
+              <Button variant="outline" size="sm" onClick={fetchPasses} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
             <p className="text-lg text-muted-foreground mb-8">Your verified attendance proofs and event credentials</p>
 
             <Card className="p-12 text-center">
@@ -110,16 +204,50 @@ export default function MyPasses() {
                       <span>•</span>
                       <span>Ethereum Sepolia</span>
                     </div>
-                    <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1">
+                    <div className="flex gap-2 mb-4">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownload(pass.tokenId)}>
                         <Download className="h-3 w-3 mr-1" />
                         Download
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
+                      <a
+                        href={`https://sepolia.etherscan.io/nft/${CONTRACT_ADDRESS}/${pass.tokenId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1"
+                      >
+                        <Button variant="outline" size="sm" className="w-full">
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                      </a>
                     </div>
+                    {transferTokenId === pass.tokenId && (
+                      <div className="flex gap-2 mb-4">
+                        <Input
+                          placeholder="Recipient address"
+                          value={transferTo}
+                          onChange={(e) => setTransferTo(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleTransfer(pass.tokenId)}
+                          disabled={isPending || isConfirming}
+                        >
+                          {isPending || isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Share className="h-3 w-3 mr-1" />}
+                          Transfer
+                        </Button>
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTransferTokenId(transferTokenId === pass.tokenId ? '' : pass.tokenId)}
+                      className="w-full"
+                    >
+                      <Share className="h-3 w-3 mr-1" />
+                      {transferTokenId === pass.tokenId ? 'Cancel Transfer' : 'Transfer Pass'}
+                    </Button>
                   </div>
                 </Card>
               ))}
