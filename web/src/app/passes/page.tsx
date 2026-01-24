@@ -9,6 +9,8 @@ import { Shield, Download, ExternalLink, Loader2, Wallet as WalletIcon } from "l
 import { useAccount } from "wagmi";
 import { toast } from "sonner";
 import Link from "next/link";
+import { publicClient, CONTRACT_ADDRESS } from '@/lib/viem-client';
+import abi from '@/lib/ModuPassTargetBase.json';
 
 interface Pass {
   eventId: string;
@@ -28,10 +30,50 @@ export default function MyPasses() {
   }, []);
 
   useEffect(() => {
+    async function fetchPasses() {
+      setLoading(true);
+      try {
+        const tokenIds = await publicClient.readContract({
+          address: CONTRACT_ADDRESS,
+          abi,
+          functionName: 'getTokensByOwner',
+          args: [address]
+        }) as bigint[];
+
+        const passesData: Pass[] = [];
+        for (const tokenId of tokenIds) {
+          const details = await publicClient.readContract({
+            address: CONTRACT_ADDRESS,
+            abi,
+            functionName: 'getTokenDetails',
+            args: [tokenId]
+          }) as [string, `0x${string}`, bigint];
+
+          const eventData = await publicClient.readContract({
+            address: CONTRACT_ADDRESS,
+            abi,
+            functionName: 'getEvent',
+            args: [details[0]]
+          }) as any; // Assuming Event struct
+
+          passesData.push({
+            eventId: details[0],
+            eventName: eventData.eventName,
+            tokenId: tokenId.toString(),
+            timestamp: new Date(Number(details[2]) * 1000).toISOString()
+          });
+        }
+        setPasses(passesData);
+      } catch (error) {
+        console.error('Error fetching passes:', error);
+        toast.error('Failed to load passes');
+      } finally {
+        setLoading(false);
+      }
+    }
+
     if (mounted && isConnected && address) {
-      // For now, we'll show a placeholder
-      // In a full implementation, you'd query the blockchain for NFTs owned by this address
-      setLoading(false);
+      fetchPasses();
     }
   }, [mounted, isConnected, address]);
 
