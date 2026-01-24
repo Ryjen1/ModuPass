@@ -157,10 +157,17 @@ export default function MyPasses() {
                         <Download className="h-3 w-3 mr-1" />
                         Download
                       </Button>
-                      <Button variant="outline" size="sm" className="flex-1">
-                        <ExternalLink className="h-3 w-3 mr-1" />
-                        View
-                      </Button>
+                      <a
+                        href={`https://sepolia.etherscan.io/nft/${CONTRACT_ADDRESS}/${pass.tokenId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex-1"
+                      >
+                        <Button variant="outline" size="sm" className="w-full">
+                          <ExternalLink className="h-3 w-3 mr-1" />
+                          View
+                        </Button>
+                      </a>
                     </div>
                   </div>
                 </Card>
