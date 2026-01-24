@@ -266,6 +266,33 @@ contract ModuPassTargetBase is TargetBase, ERC721 {
     }
 
     /**
+     * @notice Transfer a pass to another address
+     * @param to The recipient address
+     * @param tokenId The token ID to transfer
+     */
+    function transferPass(address to, uint256 tokenId) external {
+        require(_ownerOf(tokenId) == msg.sender, "Not the owner");
+        _transfer(msg.sender, to, tokenId);
+        // Update ownerToTokens
+        removeTokenFromOwner(msg.sender, tokenId);
+        ownerToTokens[to].push(tokenId);
+    }
+
+    /**
+     * @notice Helper to remove token from owner's list
+     */
+    function removeTokenFromOwner(address owner, uint256 tokenId) internal {
+        uint256[] storage tokens = ownerToTokens[owner];
+        for (uint256 i = 0; i < tokens.length; i++) {
+            if (tokens[i] == tokenId) {
+                tokens[i] = tokens[tokens.length - 1];
+                tokens.pop();
+                break;
+            }
+        }
+    }
+
+    /**
      * @notice Generate metadata for a token
      */
     function generateMetadata(uint256 tokenId, string memory eventId, address attendee, uint256 timestamp) internal view returns (string memory) {

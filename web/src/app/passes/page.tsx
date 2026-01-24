@@ -5,8 +5,9 @@ import Navigation from "@/components/Navigation";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Shield, Download, ExternalLink, Loader2, Wallet as WalletIcon } from "lucide-react";
-import { useAccount } from "wagmi";
+import { Input } from "@/components/ui/input";
+import { Shield, Download, ExternalLink, Loader2, Wallet as WalletIcon, Share } from "lucide-react";
+import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
 import Link from "next/link";
 import { publicClient, CONTRACT_ADDRESS } from '@/lib/viem-client';
@@ -24,6 +25,11 @@ export default function MyPasses() {
   const [mounted, setMounted] = useState(false);
   const [passes, setPasses] = useState<Pass[]>([]);
   const [loading, setLoading] = useState(false);
+  const [transferTo, setTransferTo] = useState('');
+  const [transferTokenId, setTransferTokenId] = useState('');
+
+  const { writeContract, isPending } = useWriteContract();
+  const { isLoading: isConfirming } = useWaitForTransactionReceipt();
 
   useEffect(() => {
     setMounted(true);
@@ -76,6 +82,26 @@ export default function MyPasses() {
       fetchPasses();
     }
   }, [mounted, isConnected, address]);
+
+  const handleTransfer = async (tokenId: string) => {
+    if (!transferTo) {
+      toast.error('Please enter recipient address');
+      return;
+    }
+    try {
+      writeContract({
+        address: CONTRACT_ADDRESS,
+        abi,
+        functionName: 'transferPass',
+        args: [transferTo as `0x${string}`, BigInt(tokenId)]
+      });
+      toast.success('Transfer initiated');
+      setTransferTo('');
+      setTransferTokenId('');
+    } catch (error) {
+      toast.error('Transfer failed');
+    }
+  };
 
   if (!mounted || !isConnected) {
     return (
@@ -152,7 +178,7 @@ export default function MyPasses() {
                       <span>•</span>
                       <span>Ethereum Sepolia</span>
                     </div>
-                    <div className="flex gap-2">
+                    <div className="flex gap-2 mb-4">
                       <Button variant="outline" size="sm" className="flex-1">
                         <Download className="h-3 w-3 mr-1" />
                         Download
@@ -169,6 +195,33 @@ export default function MyPasses() {
                         </Button>
                       </a>
                     </div>
+                    {transferTokenId === pass.tokenId && (
+                      <div className="flex gap-2 mb-4">
+                        <Input
+                          placeholder="Recipient address"
+                          value={transferTo}
+                          onChange={(e) => setTransferTo(e.target.value)}
+                          className="flex-1"
+                        />
+                        <Button
+                          size="sm"
+                          onClick={() => handleTransfer(pass.tokenId)}
+                          disabled={isPending || isConfirming}
+                        >
+                          {isPending || isConfirming ? <Loader2 className="h-3 w-3 animate-spin" /> : <Share className="h-3 w-3 mr-1" />}
+                          Transfer
+                        </Button>
+                      </div>
+                    )}
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setTransferTokenId(transferTokenId === pass.tokenId ? '' : pass.tokenId)}
+                      className="w-full"
+                    >
+                      <Share className="h-3 w-3 mr-1" />
+                      {transferTokenId === pass.tokenId ? 'Cancel Transfer' : 'Transfer Pass'}
+                    </Button>
                   </div>
                 </Card>
               ))}
