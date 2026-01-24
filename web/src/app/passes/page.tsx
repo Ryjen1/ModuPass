@@ -6,7 +6,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Shield, Download, ExternalLink, Loader2, Wallet as WalletIcon, Share } from "lucide-react";
+import { Shield, Download, ExternalLink, Loader2, Wallet as WalletIcon, Share, RefreshCw } from "lucide-react";
 import { useAccount, useWriteContract, useWaitForTransactionReceipt } from "wagmi";
 import { toast } from "sonner";
 import Link from "next/link";
@@ -35,49 +35,49 @@ export default function MyPasses() {
     setMounted(true);
   }, []);
 
-  useEffect(() => {
-    async function fetchPasses() {
-      setLoading(true);
-      try {
-        const tokenIds = await publicClient.readContract({
+  const fetchPasses = async () => {
+    setLoading(true);
+    try {
+      const tokenIds = await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi,
+        functionName: 'getTokensByOwner',
+        args: [address]
+      }) as bigint[];
+
+      const passesData: Pass[] = [];
+      for (const tokenId of tokenIds) {
+        const details = await publicClient.readContract({
           address: CONTRACT_ADDRESS,
           abi,
-          functionName: 'getTokensByOwner',
-          args: [address]
-        }) as bigint[];
+          functionName: 'getTokenDetails',
+          args: [tokenId]
+        }) as [string, `0x${string}`, bigint];
 
-        const passesData: Pass[] = [];
-        for (const tokenId of tokenIds) {
-          const details = await publicClient.readContract({
-            address: CONTRACT_ADDRESS,
-            abi,
-            functionName: 'getTokenDetails',
-            args: [tokenId]
-          }) as [string, `0x${string}`, bigint];
+        const eventData = await publicClient.readContract({
+          address: CONTRACT_ADDRESS,
+          abi,
+          functionName: 'getEvent',
+          args: [details[0]]
+        }) as any; // Assuming Event struct
 
-          const eventData = await publicClient.readContract({
-            address: CONTRACT_ADDRESS,
-            abi,
-            functionName: 'getEvent',
-            args: [details[0]]
-          }) as any; // Assuming Event struct
-
-          passesData.push({
-            eventId: details[0],
-            eventName: eventData.eventName,
-            tokenId: tokenId.toString(),
-            timestamp: new Date(Number(details[2]) * 1000).toISOString()
-          });
-        }
-        setPasses(passesData);
-      } catch (error) {
-        console.error('Error fetching passes:', error);
-        toast.error('Failed to load passes');
-      } finally {
-        setLoading(false);
+        passesData.push({
+          eventId: details[0],
+          eventName: eventData.eventName,
+          tokenId: tokenId.toString(),
+          timestamp: new Date(Number(details[2]) * 1000).toISOString()
+        });
       }
+      setPasses(passesData);
+    } catch (error) {
+      console.error('Error fetching passes:', error);
+      toast.error('Failed to load passes');
+    } finally {
+      setLoading(false);
     }
+  };
 
+  useEffect(() => {
     if (mounted && isConnected && address) {
       fetchPasses();
     }
@@ -98,8 +98,28 @@ export default function MyPasses() {
       toast.success('Transfer initiated');
       setTransferTo('');
       setTransferTokenId('');
+      // Refresh passes after transfer
+      setTimeout(() => fetchPasses(), 2000);
     } catch (error) {
       toast.error('Transfer failed');
+    }
+  };
+
+  const handleDownload = async (tokenId: string) => {
+    try {
+      const uri = await publicClient.readContract({
+        address: CONTRACT_ADDRESS,
+        abi,
+        functionName: 'tokenURI',
+        args: [BigInt(tokenId)]
+      }) as string;
+      const link = document.createElement('a');
+      link.href = uri;
+      link.download = `pass-${tokenId}.json`;
+      link.click();
+      toast.success('Metadata downloaded');
+    } catch (error) {
+      toast.error('Download failed');
     }
   };
 
@@ -109,9 +129,15 @@ export default function MyPasses() {
         <Navigation />
         <main className="container mx-auto px-4 py-12">
           <div className="max-w-5xl mx-auto">
-            <h1 className="text-4xl md:text-5xl font-bold mb-4">
-              My <span className="bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">Passes</span>
-            </h1>
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-4xl md:text-5xl font-bold">
+                My <span className="bg-gradient-to-r from-primary to-emerald-400 bg-clip-text text-transparent">Passes</span>
+              </h1>
+              <Button variant="outline" size="sm" onClick={fetchPasses} disabled={loading}>
+                <RefreshCw className={`h-4 w-4 mr-2 ${loading ? 'animate-spin' : ''}`} />
+                Refresh
+              </Button>
+            </div>
             <p className="text-lg text-muted-foreground mb-8">Your verified attendance proofs and event credentials</p>
 
             <Card className="p-12 text-center">
@@ -179,7 +205,7 @@ export default function MyPasses() {
                       <span>Ethereum Sepolia</span>
                     </div>
                     <div className="flex gap-2 mb-4">
-                      <Button variant="outline" size="sm" className="flex-1">
+                      <Button variant="outline" size="sm" className="flex-1" onClick={() => handleDownload(pass.tokenId)}>
                         <Download className="h-3 w-3 mr-1" />
                         Download
                       </Button>
