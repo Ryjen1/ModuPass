@@ -3,6 +3,8 @@ pragma solidity ^0.8.20;
 
 import "./TargetBase.sol";
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
+import "@openzeppelin/contracts/utils/Base64.sol";
 
 /**
  * @title ModuPassTargetBase
@@ -42,7 +44,9 @@ contract ModuPassTargetBase is TargetBase, ERC721 {
     mapping(uint256 => string) public tokenToEventId;
     mapping(uint256 => address) public tokenToAttendee;
     mapping(uint256 => uint256) public tokenToTimestamp;
+    mapping(address => uint256[]) public ownerToTokens;
     string private _baseTokenURI;
+    mapping(uint256 => string) public tokenMetadata;
 
     // Events
     event EventCreated(
@@ -163,9 +167,14 @@ contract ModuPassTargetBase is TargetBase, ERC721 {
         // Mint NFT pass
         uint256 tokenId = _nextTokenId++;
         _mint(data.attendee, tokenId);
+        ownerToTokens[data.attendee].push(tokenId);
         tokenToEventId[tokenId] = data.eventId;
         tokenToAttendee[tokenId] = data.attendee;
         tokenToTimestamp[tokenId] = data.timestamp;
+
+        // Generate metadata
+        string memory metadata = generateMetadata(tokenId, data.eventId, data.attendee, data.timestamp);
+        tokenMetadata[tokenId] = metadata;
 
         emit PassMinted(tokenId, data.eventId, data.attendee, data.timestamp);
     }
@@ -250,5 +259,39 @@ contract ModuPassTargetBase is TargetBase, ERC721 {
 
     function getTokenDetails(uint256 tokenId) external view returns (string memory eventId, address attendee, uint256 timestamp) {
         return (tokenToEventId[tokenId], tokenToAttendee[tokenId], tokenToTimestamp[tokenId]);
+    }
+
+    function getTokensByOwner(address owner) external view returns (uint256[] memory) {
+        return ownerToTokens[owner];
+    }
+
+    /**
+     * @notice Generate metadata for a token
+     */
+    function generateMetadata(uint256 tokenId, string memory eventId, address attendee, uint256 timestamp) internal view returns (string memory) {
+        Event memory eventData = events[eventId];
+        string memory json = string(abi.encodePacked(
+            '{"name": "ModuPass - ', eventData.eventName, '", ',
+            '"description": "Verified attendance pass for ', eventData.eventName, '", ',
+            '"image": "', _baseTokenURI, 'image/', Strings.toString(tokenId), '.png", ',
+            '"attributes": [',
+            '{"trait_type": "Event", "value": "', eventData.eventName, '"}, ',
+            '{"trait_type": "Attendee", "value": "', Strings.toHexString(attendee), '"}, ',
+            '{"trait_type": "Timestamp", "value": "', Strings.toString(timestamp), '"}',
+            ']}'
+        ));
+        return json;
+    }
+
+    /**
+     * @notice Get token URI
+     */
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        require(_ownerOf(tokenId) != address(0), "Token does not exist");
+        string memory metadata = tokenMetadata[tokenId];
+        if (bytes(metadata).length == 0) {
+            return "";
+        }
+        return string(abi.encodePacked("data:application/json;base64,", Base64.encode(bytes(metadata))));
     }
 }
